@@ -1,0 +1,299 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>SettingsDialog</class>
+ <widget class="QDialog" name="SettingsDialog">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>650</width>
+    <height>600</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Настройки</string>
+  </property>
+  <layout class="QVBoxLayout" name="verticalLayout">
+   <item>
+    <widget class="QGroupBox" name="groupBox">
+     <property name="title">
+      <string>Пути к Whisper</string>
+     </property>
+     <layout class="QFormLayout" name="formLayout">
+      <item row="0" column="0">
+       <widget class="QLabel" name="whisperLabel">
+        <property name="text">
+         <string>Путь к whisper:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="1">
+       <layout class="QHBoxLayout" name="horizontalLayout">
+        <item>
+         <widget class="QLineEdit" name="whisperPathEdit">
+          <property name="placeholderText">
+           <string>например: /путь/к/whisper.cpp/main</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="browseWhisperButton">
+          <property name="text">
+           <string>Обзор...</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+      <item row="1" column="0">
+       <widget class="QLabel" name="modelLabel">
+        <property name="text">
+         <string>Путь к модели:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="1">
+       <layout class="QHBoxLayout" name="horizontalLayout_2">
+        <item>
+         <widget class="QLineEdit" name="modelPathEdit">
+          <property name="placeholderText">
+           <string>например: /путь/к/models/ggml-base.bin</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="browseModelButton">
+          <property name="text">
+           <string>Обзор...</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+      <item row="2" column="0">
+       <widget class="QLabel" name="languageLabel">
+        <property name="text">
+         <string>Язык:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="1">
+       <widget class="QComboBox" name="languageComboBox">
+        <property name="currentText">
+         <string>ru</string>
+        </property>
+        <item>
+         <property name="text">
+          <string>ru</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>en</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>de</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>fr</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>es</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>it</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>ja</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>zh</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>ko</string>
+         </property>
+        </item>
+       </widget>
+      </item>
+      <item row="3" column="0">
+       <widget class="QLabel" name="audioDeviceLabel">
+        <property name="text">
+         <string>Микрофон:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="1">
+       <layout class="QHBoxLayout" name="horizontalLayout_4">
+        <item>
+         <widget class="QComboBox" name="audioDeviceComboBox">
+          <property name="toolTip">
+           <string>Выберите устройство записи звука</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="refreshDevicesButton">
+          <property name="text">
+           <string>🔄 Обновить</string>
+          </property>
+          <property name="toolTip">
+           <string>Обновить список аудио устройств</string>
+          </property>
+          <property name="maximumSize">
+           <size>
+            <width>100</width>
+            <height>16777215</height>
+           </size>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="downloadGroup">
+     <property name="title">
+      <string>Скачать необходимые компоненты</string>
+     </property>
+     <layout class="QVBoxLayout" name="verticalLayout_2">
+      <item>
+       <widget class="QLabel" name="infoLabel">
+        <property name="text">
+         <string>Для работы программы необходимо установить:</string>
+        </property>
+        <property name="wordWrap">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLabel" name="whisperLinkLabel">
+        <property name="text">
+         <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;
+&lt;p&gt;&lt;b&gt;1. Whisper.cpp&lt;/b&gt; - движок распознавания речи&lt;/p&gt;
+&lt;p style=&quot;margin-left: 20px;&quot;&gt;
+&lt;a href=&quot;https://github.com/ggerganov/whisper.cpp&quot;&gt;
+&lt;span style=&quot;color:#0066cc;&quot;&gt;→ Скачать Whisper.cpp с GitHub&lt;/span&gt;
+&lt;/a&gt;
+&lt;/p&gt;
+&lt;p style=&quot;margin-left: 20px; color: #666;&quot;&gt;
+После сборки укажите путь к исполняемому файлу 'main' или 'main.exe'
+&lt;/p&gt;
+&lt;/body&gt;&lt;/html&gt;</string>
+        </property>
+        <property name="textFormat">
+         <enum>Qt::RichText</enum>
+        </property>
+        <property name="openExternalLinks">
+         <bool>true</bool>
+        </property>
+        <property name="wordWrap">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="Line" name="line">
+        <property name="orientation">
+         <enum>Qt::Horizontal</enum>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLabel" name="modelLinkLabel">
+        <property name="text">
+         <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;
+&lt;p&gt;&lt;b&gt;2. Модели Whisper&lt;/b&gt; - файлы для распознавания речи (.bin)&lt;/p&gt;
+&lt;p style=&quot;margin-left: 20px;&quot;&gt;
+&lt;a href=&quot;https://huggingface.co/ggerganov/whisper.cpp/tree/main&quot;&gt;
+&lt;span style=&quot;color:#0066cc;&quot;&gt;→ Скачать модели с HuggingFace&lt;/span&gt;
+&lt;/a&gt;
+&lt;/p&gt;
+&lt;p style=&quot;margin-left: 20px; color: #666;&quot;&gt;
+Рекомендуемые модели:&lt;br/&gt;
+• ggml-tiny.bin (75 МБ) - быстрая, низкое качество&lt;br/&gt;
+• ggml-base.bin (142 МБ) - оптимальная&lt;br/&gt;
+• ggml-small.bin (466 МБ) - хорошее качество&lt;br/&gt;
+• ggml-medium.bin (1.5 ГБ) - высокое качество
+&lt;/p&gt;
+&lt;/body&gt;&lt;/html&gt;</string>
+        </property>
+        <property name="textFormat">
+         <enum>Qt::RichText</enum>
+        </property>
+        <property name="openExternalLinks">
+         <bool>true</bool>
+        </property>
+        <property name="wordWrap">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <spacer name="verticalSpacer">
+     <property name="orientation">
+      <enum>Qt::Vertical</enum>
+     </property>
+     <property name="sizeHint" stdset="0">
+      <size>
+       <width>20</width>
+       <height>20</height>
+      </size>
+     </property>
+    </spacer>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="horizontalLayout_3">
+     <item>
+      <spacer name="horizontalSpacer">
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="sizeHint" stdset="0">
+        <size>
+         <width>40</width>
+         <height>20</height>
+        </size>
+       </property>
+      </spacer>
+     </item>
+     <item>
+      <widget class="QPushButton" name="saveButton">
+       <property name="text">
+        <string>Сохранить</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="cancelButton">
+       <property name="text">
+        <string>Отмена</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>
