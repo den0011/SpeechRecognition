@@ -52,3 +52,6 @@ compile_commands.json
 *creator.user*
 
 *_qmlcache.qrc
+whisper-bin-Win32
+ggml-base.bin
+ggml-base

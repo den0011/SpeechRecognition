@@ -33,6 +33,8 @@ private slots:
     void updateRecordingTimer();
     void onRefreshAudioDevices();
     void onOpenRecordingsClicked();
+    void onAudioConfigClicked();
+    void onLoadFileClicked();
 
 private:
     void loadSettings();
@@ -41,6 +43,7 @@ private:
     void showModelNotFoundWarning();
     bool checkComponentsBeforeRecording();
     void addLog(const QString &message, const QString &level = "INFO");
+    void applyAudioSettings();
 
 private:
     Ui::MainWindow *ui;

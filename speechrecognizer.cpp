@@ -9,32 +9,21 @@
 #include <QCoreApplication>
 #include <QDateTime>
 
-
-
 SpeechRecognizer::SpeechRecognizer(QObject *parent)
     : QObject(parent)
     , m_audioRecorder(new QAudioRecorder(this))
     , m_whisperProcess(nullptr)
     , m_language("ru")
     , m_audioDeviceName("")
+    , m_sampleRate(16000)
+    , m_bitRate(256000)
+    , m_channelCount(1)
 {
-    // Путь к whisper.cpp исполняемому файлу (по умолчанию)
-    // Рекомендуется whisper-cli.exe, но main.exe тоже работает
     m_whisperPath = "./whisper.cpp/whisper-cli.exe";
-
-    // Путь к модели (по умолчанию)
     m_modelPath = "./whisper.cpp/models/ggml-base.bin";
 
-    // Настройка записи аудио для whisper (требует 16kHz mono WAV)
-    QAudioEncoderSettings audioSettings;
-    audioSettings.setCodec("audio/pcm");
-    audioSettings.setSampleRate(16000);
-    audioSettings.setChannelCount(1);
-    audioSettings.setBitRate(256000);
-    audioSettings.setQuality(QMultimedia::HighQuality);
-
-    m_audioRecorder->setEncodingSettings(audioSettings);
-    m_audioRecorder->setContainerFormat("audio/x-wav");
+    // Применяем настройки по умолчанию
+    applyAudioSettings();
 
     // Устанавливаем устройство ввода по умолчанию
     QAudioDeviceInfo defaultDevice = QAudioDeviceInfo::defaultInputDevice();
@@ -94,6 +83,33 @@ void SpeechRecognizer::setAudioDevice(const QString &deviceName)
     }
 }
 
+void SpeechRecognizer::setAudioSettings(int sampleRate, int bitRate, int channels)
+{
+    m_sampleRate = sampleRate;
+    m_bitRate = bitRate;
+    m_channelCount = channels;
+    
+    applyAudioSettings();
+    
+    qDebug() << "Audio settings updated:"
+             << "Sample rate:" << m_sampleRate
+             << "Bit rate:" << m_bitRate
+             << "Channels:" << m_channelCount;
+}
+
+void SpeechRecognizer::applyAudioSettings()
+{
+    QAudioEncoderSettings audioSettings;
+    audioSettings.setCodec("audio/pcm");
+    audioSettings.setSampleRate(m_sampleRate);
+    audioSettings.setChannelCount(m_channelCount);
+    audioSettings.setBitRate(m_bitRate);
+    audioSettings.setQuality(QMultimedia::HighQuality);
+
+    m_audioRecorder->setEncodingSettings(audioSettings);
+    m_audioRecorder->setContainerFormat("audio/x-wav");
+}
+
 QString SpeechRecognizer::getWhisperPath() const
 {
     return m_whisperPath;
@@ -129,7 +145,6 @@ QStringList SpeechRecognizer::getAvailableAudioDevices() const
 
 void SpeechRecognizer::startRecording()
 {
-    // Проверяем доступность аудио устройства
     QAudioDeviceInfo deviceInfo;
     QList<QAudioDeviceInfo> audioDevices = QAudioDeviceInfo::availableDevices(QAudio::AudioInput);
     
@@ -138,7 +153,6 @@ void SpeechRecognizer::startRecording()
         return;
     }
     
-    // Находим выбранное устройство
     bool deviceFound = false;
     for (const QAudioDeviceInfo &device : audioDevices) {
         if (device.deviceName() == m_audioDeviceName) {
@@ -154,10 +168,13 @@ void SpeechRecognizer::startRecording()
         qDebug() << "Selected device not found, using default:" << m_audioDeviceName;
     }
     
+    // Применяем текущие настройки аудио
+    applyAudioSettings();
+    
     // Проверяем поддержку формата
     QAudioFormat format;
-    format.setSampleRate(16000);
-    format.setChannelCount(1);
+    format.setSampleRate(m_sampleRate);
+    format.setChannelCount(m_channelCount);
     format.setSampleSize(16);
     format.setCodec("audio/pcm");
     format.setByteOrder(QAudioFormat::LittleEndian);
@@ -168,7 +185,6 @@ void SpeechRecognizer::startRecording()
         format = deviceInfo.nearestFormat(format);
     }
     
-    // Создаем папку recordings рядом с exe файлом
     QString appDir = QCoreApplication::applicationDirPath();
     QString recordingsDir = appDir + "/recordings";
     
@@ -182,11 +198,9 @@ void SpeechRecognizer::startRecording()
         }
     }
     
-    // Создаем имя файла с датой и временем
     QString timestamp = QDateTime::currentDateTime().toString("yyyy-MM-dd_HH-mm-ss");
     m_tempAudioFile = recordingsDir + "/recording_" + timestamp + ".wav";
     
-    // Удаляем старый файл если существует
     QFile::remove(m_tempAudioFile);
 
     m_audioRecorder->setOutputLocation(QUrl::fromLocalFile(m_tempAudioFile));
@@ -195,6 +209,7 @@ void SpeechRecognizer::startRecording()
     emit recordingStarted();
     qDebug() << "Recording started to:" << m_tempAudioFile;
     qDebug() << "Using device:" << m_audioDeviceName;
+    qDebug() << "Settings:" << m_sampleRate << "Hz," << m_bitRate << "bps," << m_channelCount << "ch";
 }
 
 void SpeechRecognizer::stopRecording()
@@ -210,7 +225,6 @@ void SpeechRecognizer::onRecordingFinished()
 {
     qDebug() << "Recording finished, audio file:" << m_tempAudioFile;
     
-    // Проверяем существование и размер файла
     QFile audioFile(m_tempAudioFile);
     if (!audioFile.exists()) {
         emit error("Аудио файл не был создан. Проверьте права доступа к микрофону.");
@@ -220,7 +234,7 @@ void SpeechRecognizer::onRecordingFinished()
     qint64 fileSize = audioFile.size();
     qDebug() << "Audio file size:" << fileSize << "bytes";
     
-    if (fileSize < 1000) { // Меньше 1KB
+    if (fileSize < 1000) {
         emit error("Аудио файл слишком мал. Возможно, микрофон не записывает звук.");
         return;
     }
@@ -245,7 +259,6 @@ void SpeechRecognizer::recognizeFromFile(const QString &audioFile)
         return;
     }
 
-    // Создаем процесс для запуска whisper
     if (m_whisperProcess) {
         m_whisperProcess->deleteLater();
     }
@@ -257,13 +270,12 @@ void SpeechRecognizer::recognizeFromFile(const QString &audioFile)
     connect(m_whisperProcess, &QProcess::errorOccurred,
             this, &SpeechRecognizer::onWhisperError);
 
-    // Аргументы для whisper.cpp
     QStringList arguments;
     arguments << "-m" << m_modelPath;
     arguments << "-f" << audioFile;
     arguments << "-l" << m_language;
     arguments << "--no-timestamps";
-    arguments << "-nt"; // Без потоков (для стабильности)
+    arguments << "-nt";
 
     qDebug() << "Running:" << m_whisperPath << arguments;
 
@@ -283,26 +295,20 @@ void SpeechRecognizer::onWhisperFinished(int exitCode, QProcess::ExitStatus exit
     qDebug() << "Whisper stdout:" << output;
     qDebug() << "Whisper stderr:" << errorOutput;
 
-    // Если используется main.exe и код ошибки 1, но есть предупреждение о deprecated
-    // это не настоящая ошибка - просто предупреждение
     bool isDeprecatedWarning = (exitCode == 1 && 
                                 output.contains("deprecated") && 
                                 output.contains("whisper-cli"));
 
     if (exitStatus == QProcess::NormalExit && (exitCode == 0 || isDeprecatedWarning)) {
-        // Если это было предупреждение о deprecated, уведомляем пользователя но продолжаем
         if (isDeprecatedWarning) {
             qDebug() << "Note: Using deprecated main.exe, recommend switching to whisper-cli.exe";
-            // Не генерируем ошибку, просто логируем
         }
         
-        // Парсим вывод whisper
         QStringList lines = output.split('\n', QString::SkipEmptyParts);
         QString recognizedText;
 
         for (const QString &line : lines) {
             QString trimmedLine = line.trimmed();
-            // Пропускаем строки с метаданными и предупреждениями
             if (!trimmedLine.contains("[") && 
                 !trimmedLine.startsWith("whisper_") &&
                 !trimmedLine.contains("Processing") &&
@@ -320,7 +326,6 @@ void SpeechRecognizer::onWhisperFinished(int exitCode, QProcess::ExitStatus exit
         if (!recognizedText.isEmpty()) {
             emit recognitionComplete(recognizedText);
         } else {
-            // Если текст пуст но был deprecated warning, пробуем еще раз поискать текст
             if (isDeprecatedWarning) {
                 emit error("Текст не распознан. Whisper работает, но не обнаружил речи.\n"
                           "Примечание: Рекомендуется использовать whisper-cli.exe вместо main.exe");
@@ -329,14 +334,12 @@ void SpeechRecognizer::onWhisperFinished(int exitCode, QProcess::ExitStatus exit
             }
         }
     } else if (!isDeprecatedWarning) {
-        // Это настоящая ошибка
         QString errorMsg = "Ошибка Whisper (код: " + QString::number(exitCode) + ")";
         
         if (!errorOutput.isEmpty()) {
             errorMsg += "\nДетали: " + errorOutput;
         }
         
-        // Анализируем типичные ошибки
         if (errorOutput.contains("Could not open")) {
             errorMsg = "Не удалось открыть аудио файл. Возможно, формат не поддерживается.";
         } else if (errorOutput.contains("model")) {

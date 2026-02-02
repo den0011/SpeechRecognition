@@ -22,13 +22,13 @@ public:
     void setModelPath(const QString &path);
     void setLanguage(const QString &lang);
     void setAudioDevice(const QString &deviceName);
+    void setAudioSettings(int sampleRate, int bitRate, int channels);
 
     QString getWhisperPath() const;
     QString getModelPath() const;
     QString getLanguage() const;
     QString getAudioDevice() const;
     
-    // Получить список доступных аудио устройств
     QStringList getAvailableAudioDevices() const;
 
 signals:
@@ -36,12 +36,14 @@ signals:
     void error(const QString &errorMsg);
     void recordingStarted();
     void recordingStopped();
-    void processingProgress(int percentage);
 
 private slots:
     void onRecordingFinished();
     void onWhisperFinished(int exitCode, QProcess::ExitStatus exitStatus);
     void onWhisperError(QProcess::ProcessError error);
+
+private:
+    void applyAudioSettings();
 
 private:
     QAudioRecorder *m_audioRecorder;
@@ -51,6 +53,11 @@ private:
     QString m_modelPath;
     QString m_language;
     QString m_audioDeviceName;
+    
+    // Настраиваемые параметры аудио
+    int m_sampleRate;
+    int m_bitRate;
+    int m_channelCount;
 };
 
 #endif // SPEECHRECOGNIZER_H

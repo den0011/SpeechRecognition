@@ -1,6 +1,7 @@
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
 #include "settingsdialog.h"
+#include "audioconfigdialog.h"
 
 #include <QDebug>
 #include <QDateTime>
@@ -8,6 +9,8 @@
 #include <QMessageBox>
 #include <QFile>
 #include <QFileInfo>
+#include <QFileDialog>
+#include <QStandardPaths>
 #include <QCoreApplication>
 #include <QProcess>
 #include <QDir>
@@ -60,6 +63,15 @@ MainWindow::MainWindow(QWidget *parent)
             "<h3>Голос в текст - Whisper</h3>"
             "<p>Версия 1.2</p>"
             "<p>Программа для распознавания речи с использованием Whisper.cpp</p>"
+            "<br>"
+            "<p><b>Возможности:</b></p>"
+            "<ul>"
+            "<li>Запись голоса с микрофона</li>"
+            "<li>Распознавание аудио файлов</li>"
+            "<li>Настройка параметров микрофона</li>"
+            "<li>Эквалайзер и визуализация</li>"
+            "<li>Тестовая запись</li>"
+            "</ul>"
             "<br>"
             "<p><b>Для работы требуется:</b></p>"
             "<ul>"
@@ -163,6 +175,100 @@ void MainWindow::onSettingsClicked()
     }
 }
 
+void MainWindow::onAudioConfigClicked()
+{
+    AudioConfigDialog dialog(this);
+    
+    // Загружаем доступные устройства
+    QStringList audioDevices = m_recognizer->getAvailableAudioDevices();
+    dialog.setAvailableAudioDevices(audioDevices);
+    dialog.setAudioDevice(m_recognizer->getAudioDevice());
+    
+    // Подключаем сигнал сохранения настроек
+    connect(&dialog, &AudioConfigDialog::settingsSaved,
+            this, &MainWindow::applyAudioSettings);
+    
+    if (dialog.exec() == QDialog::Accepted) {
+        addLog("Настройки микрофона сохранены", "SUCCESS");
+    }
+}
+
+void MainWindow::onLoadFileClicked()
+{
+    QString fileName = QFileDialog::getOpenFileName(this,
+        "Выберите аудио файл для распознавания",
+        QStandardPaths::writableLocation(QStandardPaths::MusicLocation),
+        "Аудио файлы (*.wav *.mp3 *.m4a *.flac *.ogg);;Все файлы (*.*)");
+    
+    if (fileName.isEmpty()) {
+        return;
+    }
+    
+    // Проверяем существование файла
+    if (!QFile::exists(fileName)) {
+        QMessageBox::warning(this, "Ошибка", "Файл не найден:\n" + fileName);
+        addLog("Файл не найден: " + fileName, "ERROR");
+        return;
+    }
+    
+    // Проверяем размер файла
+    QFileInfo fileInfo(fileName);
+    qint64 fileSize = fileInfo.size();
+    
+    if (fileSize < 1000) {
+        QMessageBox::warning(this, "Ошибка", "Файл слишком мал или поврежден");
+        addLog("Файл слишком мал: " + fileName, "ERROR");
+        return;
+    }
+    
+    // Проверяем наличие Whisper и модели
+    if (!checkComponentsBeforeRecording()) {
+        return;
+    }
+    
+    // Спрашиваем подтверждение
+    QMessageBox::StandardButton reply;
+    reply = QMessageBox::question(this, "Распознать файл?",
+        "Распознать речь из файла:\n\n" + fileName + "\n\n"
+        "Размер: " + QString::number(fileSize / 1024) + " КБ\n\n"
+        "Продолжить?",
+        QMessageBox::Yes|QMessageBox::No);
+    
+    if (reply == QMessageBox::Yes) {
+        addLog("Начинаем распознавание файла: " + fileName, "INFO");
+        addLog("Размер файла: " + QString::number(fileSize) + " байт", "INFO");
+        
+        ui->statusLabel->setText("⏳ Обработка файла...");
+        ui->recordButton->setEnabled(false);
+        ui->textEdit->append("\n--- " + QDateTime::currentDateTime().toString("hh:mm:ss") + " Распознавание файла ---");
+        ui->textEdit->append("Файл: " + fileInfo.fileName());
+        ui->textEdit->append("Путь: " + fileName);
+        ui->textEdit->append("Размер: " + QString::number(fileSize / 1024) + " КБ\n");
+        
+        // Запускаем распознавание
+        m_recognizer->recognizeFromFile(fileName);
+    }
+}
+
+void MainWindow::applyAudioSettings()
+{
+    // Применяем настройки аудио к распознавателю
+    QSettings settings("MyCompany", "SpeechRecognition");
+    
+    int sampleRate = settings.value("AudioConfig/SampleRate", 16000).toInt();
+    int bitRate = settings.value("AudioConfig/BitRate", 256000).toInt();
+    int channels = settings.value("AudioConfig/Channels", 1).toInt();
+    QString device = settings.value("AudioDevice", "").toString();
+    
+    addLog(QString("Применены настройки: %1 Hz, %2 kbps, %3 канал(а)")
+        .arg(sampleRate)
+        .arg(bitRate / 1000)
+        .arg(channels), "INFO");
+    
+    m_recognizer->setAudioDevice(device);
+    m_recognizer->setAudioSettings(sampleRate, bitRate, channels);
+}
+
 void MainWindow::loadSettings()
 {
     QSettings settings("MyCompany", "SpeechRecognition");
@@ -192,6 +298,13 @@ void MainWindow::loadSettings()
     if (!audioDevice.isEmpty()) {
         m_recognizer->setAudioDevice(audioDevice);
     }
+    
+    // Загружаем настройки аудио
+    int sampleRate = settings.value("AudioConfig/SampleRate", 16000).toInt();
+    int bitRate = settings.value("AudioConfig/BitRate", 256000).toInt();
+    int channels = settings.value("AudioConfig/Channels", 1).toInt();
+    
+    m_recognizer->setAudioSettings(sampleRate, bitRate, channels);
 }
 
 void MainWindow::saveSettings()
@@ -244,7 +357,7 @@ bool MainWindow::checkComponentsBeforeRecording()
         );
 
         QPushButton *settingsButton = msgBox.addButton("Открыть настройки", QMessageBox::ActionRole);
-        QPushButton *cancelButton = msgBox.addButton("Отмена", QMessageBox::RejectRole);
+        msgBox.addButton("Отмена", QMessageBox::RejectRole);
 
         msgBox.setDefaultButton(settingsButton);
         msgBox.exec();
@@ -271,7 +384,7 @@ bool MainWindow::checkComponentsBeforeRecording()
         );
 
         QPushButton *settingsButton = msgBox.addButton("Открыть настройки", QMessageBox::ActionRole);
-        QPushButton *cancelButton = msgBox.addButton("Отмена", QMessageBox::RejectRole);
+        msgBox.addButton("Отмена", QMessageBox::RejectRole);
 
         msgBox.setDefaultButton(settingsButton);
         msgBox.exec();
@@ -333,18 +446,21 @@ void MainWindow::showModelNotFoundWarning()
         "\nОткройте настройки и:\n"
         "1. Скачайте необходимые компоненты по ссылкам\n"
         "2. Укажите пути к установленным файлам\n"
-        "3. Выберите микрофон для записи\n\n"
+        "3. Настройте микрофон\n\n"
         "Без этих компонентов программа не сможет работать."
     );
 
     QPushButton *settingsButton = msgBox.addButton("Открыть настройки", QMessageBox::ActionRole);
-    QPushButton *ignoreButton = msgBox.addButton("Понятно", QMessageBox::RejectRole);
+    QPushButton *audioButton = msgBox.addButton("Настроить микрофон", QMessageBox::ActionRole);
+    msgBox.addButton("Понятно", QMessageBox::RejectRole);
 
     msgBox.setDefaultButton(settingsButton);
     msgBox.exec();
 
     if (msgBox.clickedButton() == settingsButton) {
         onSettingsClicked();
+    } else if (msgBox.clickedButton() == audioButton) {
+        onAudioConfigClicked();
     }
 }
 
@@ -372,7 +488,6 @@ void MainWindow::onRecordingStarted()
     ui->textEdit->append("\n--- " + QDateTime::currentDateTime().toString("hh:mm:ss") + " Запись началась ---");
     ui->textEdit->append("Микрофон: " + m_recognizer->getAudioDevice() + "\n");
     
-    // Запускаем таймер
     ui->timerLabel->setVisible(true);
     ui->timerLabel->setText("⏱️ 00:00");
     m_elapsedTimer.start();
@@ -432,22 +547,38 @@ void MainWindow::onError(const QString &error)
     if (error.contains("не был создан") || error.contains("не записывает")) {
         addLog("Проблема с микрофоном или правами доступа", "ERROR");
         
-        QMessageBox::critical(this, "Проблема с микрофоном",
-            "Возможные причины:\n\n"
+        QMessageBox msgBox(this);
+        msgBox.setIcon(QMessageBox::Critical);
+        msgBox.setWindowTitle("Проблема с микрофоном");
+        msgBox.setText("Возможные причины:\n\n"
             "1. Микрофон не подключен или отключен в системе\n"
             "2. Программе не предоставлен доступ к микрофону\n"
             "3. Микрофон используется другой программой\n\n"
             "Решение:\n"
             "• Проверьте настройки звука в системе\n"
             "• Предоставьте программе доступ к микрофону\n"
-            "• Выберите другой микрофон в настройках программы");
-    } else if (error.contains("deprecated") || error.contains("whisper-cli")) {
-        addLog("Используется устаревший исполняемый файл", "WARNING");
+            "• Откройте настройки микрофона для тестирования");
         
-        QMessageBox::warning(this, "Используется устаревший файл",
-            "Вы используете устаревший файл 'main.exe'.\n\n"
-            "Рекомендуется использовать 'whisper-cli.exe' вместо него.\n\n"
-            "Откройте настройки и укажите путь к whisper-cli.exe");
+        QPushButton *audioButton = msgBox.addButton("Настроить микрофон", QMessageBox::ActionRole);
+        msgBox.addButton("OK", QMessageBox::AcceptRole);
+        msgBox.exec();
+        
+        if (msgBox.clickedButton() == audioButton) {
+            onAudioConfigClicked();
+        }
+    } else if (error.contains("Не удалось открыть аудио файл")) {
+        addLog("Проблема с форматом или кодировкой файла", "ERROR");
+        
+        QMessageBox::critical(this, "Ошибка файла",
+            "Не удалось открыть аудио файл.\n\n"
+            "Возможные причины:\n"
+            "1. Неподдерживаемый формат файла\n"
+            "2. Файл поврежден\n"
+            "3. Неправильная кодировка\n\n"
+            "Попробуйте:\n"
+            "• Конвертировать файл в WAV формат\n"
+            "• Проверить целостность файла\n"
+            "• Использовать другой файл");
     }
 }
 

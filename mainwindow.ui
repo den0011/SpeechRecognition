@@ -17,12 +17,6 @@
    <layout class="QVBoxLayout" name="verticalLayout">
     <item>
      <widget class="QLabel" name="titleLabel">
-      <property name="text">
-       <string>Распознавание речи (Whisper)</string>
-      </property>
-      <property name="alignment">
-       <set>Qt::AlignCenter</set>
-      </property>
       <property name="font">
        <font>
         <pointsize>14</pointsize>
@@ -30,13 +24,16 @@
         <bold>true</bold>
        </font>
       </property>
+      <property name="text">
+       <string>Распознавание речи (Whisper)</string>
+      </property>
+      <property name="alignment">
+       <set>Qt::AlignCenter</set>
+      </property>
      </widget>
     </item>
     <item>
      <widget class="QPushButton" name="recordButton">
-      <property name="text">
-       <string>🎤 Начать запись</string>
-      </property>
       <property name="minimumSize">
        <size>
         <width>0</width>
@@ -48,31 +45,28 @@
         <pointsize>12</pointsize>
        </font>
       </property>
+      <property name="text">
+       <string>🎤 Начать запись</string>
+      </property>
      </widget>
     </item>
     <item>
      <widget class="QLabel" name="statusLabel">
+      <property name="font">
+       <font>
+        <pointsize>10</pointsize>
+       </font>
+      </property>
       <property name="text">
        <string>Готов к записи</string>
       </property>
       <property name="alignment">
        <set>Qt::AlignCenter</set>
       </property>
-      <property name="font">
-       <font>
-        <pointsize>10</pointsize>
-       </font>
-      </property>
      </widget>
     </item>
     <item>
      <widget class="QLabel" name="timerLabel">
-      <property name="text">
-       <string>⏱️ 00:00</string>
-      </property>
-      <property name="alignment">
-       <set>Qt::AlignCenter</set>
-      </property>
       <property name="font">
        <font>
         <pointsize>16</pointsize>
@@ -80,83 +74,60 @@
         <bold>true</bold>
        </font>
       </property>
+      <property name="visible">
+       <bool>false</bool>
+      </property>
       <property name="styleSheet">
        <string>color: #d32f2f;</string>
       </property>
-      <property name="visible">
-       <bool>false</bool>
+      <property name="text">
+       <string>⏱️ 00:00</string>
       </property>
-     </widget>
-    </item>
-    <item>
-     <widget class="QProgressBar" name="recognitionProgressBar">
-      <property name="value">
-       <number>0</number>
-      </property>
-      <property name="textVisible">
-       <bool>true</bool>
-      </property>
-      <property name="format">
-       <string>Обработка: %p%</string>
-      </property>
-      <property name="visible">
-       <bool>false</bool>
-      </property>
-      <property name="styleSheet">
-       <string>QProgressBar {
-    border: 2px solid #ccc;
-    border-radius: 5px;
-    text-align: center;
-    background-color: #f0f0f0;
-}
-
-QProgressBar::chunk {
-    background-color: #4caf50;
-    border-radius: 3px;
-}</string>
+      <property name="alignment">
+       <set>Qt::AlignCenter</set>
       </property>
      </widget>
     </item>
     <item>
      <widget class="QTextEdit" name="textEdit">
-      <property name="placeholderText">
-       <string>Распознанный текст появится здесь...</string>
-      </property>
       <property name="font">
        <font>
         <pointsize>10</pointsize>
        </font>
       </property>
+      <property name="placeholderText">
+       <string>Распознанный текст появится здесь...</string>
+      </property>
      </widget>
     </item>
     <item>
      <widget class="QGroupBox" name="logGroupBox">
-      <property name="title">
-       <string>📋 Логи отладки</string>
-      </property>
       <property name="maximumSize">
        <size>
         <width>16777215</width>
         <height>150</height>
        </size>
       </property>
+      <property name="title">
+       <string>📋 Логи отладки</string>
+      </property>
       <layout class="QVBoxLayout" name="verticalLayout_2">
        <item>
         <widget class="QTextEdit" name="logTextEdit">
-         <property name="readOnly">
-          <bool>true</bool>
-         </property>
          <property name="font">
           <font>
            <family>Courier New</family>
            <pointsize>8</pointsize>
           </font>
          </property>
-         <property name="placeholderText">
-          <string>Техническая информация и логи появятся здесь...</string>
-         </property>
          <property name="styleSheet">
           <string>background-color: #f5f5f5; color: #333;</string>
+         </property>
+         <property name="readOnly">
+          <bool>true</bool>
+         </property>
+         <property name="placeholderText">
+          <string>Техническая информация и логи появятся здесь...</string>
          </property>
         </widget>
        </item>
@@ -177,14 +148,14 @@ QProgressBar::chunk {
          </item>
          <item>
           <widget class="QPushButton" name="clearLogsButton">
-           <property name="text">
-            <string>Очистить логи</string>
-           </property>
            <property name="maximumSize">
             <size>
              <width>120</width>
              <height>16777215</height>
             </size>
+           </property>
+           <property name="text">
+            <string>Очистить логи</string>
            </property>
           </widget>
          </item>
@@ -209,6 +180,9 @@ QProgressBar::chunk {
      <string>Файл</string>
     </property>
     <addaction name="actionSettings"/>
+    <addaction name="actionAudioConfig"/>
+    <addaction name="separator"/>
+    <addaction name="actionLoadFile"/>
     <addaction name="actionOpenRecordings"/>
     <addaction name="separator"/>
     <addaction name="actionExit"/>
@@ -223,25 +197,38 @@ QProgressBar::chunk {
    <addaction name="menuHelp"/>
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
-  
   <action name="actionSettings">
    <property name="text">
-    <string>Настройки</string>
+    <string>⚙️ Настройки</string>
    </property>
    <property name="toolTip">
     <string>Настройки программы</string>
    </property>
   </action>
-  
+  <action name="actionAudioConfig">
+   <property name="text">
+    <string>🎙️ Настройка микрофона</string>
+   </property>
+   <property name="toolTip">
+    <string>Детальная настройка микрофона, эквалайзер, тестирование</string>
+   </property>
+  </action>
+  <action name="actionLoadFile">
+   <property name="text">
+    <string>📁 Загрузить файл для распознавания</string>
+   </property>
+   <property name="toolTip">
+    <string>Загрузить аудио файл и распознать речь</string>
+   </property>
+  </action>
   <action name="actionOpenRecordings">
    <property name="text">
-    <string>Открыть папку с записями</string>
+    <string>🗂 Открыть папку с записями</string>
    </property>
    <property name="toolTip">
     <string>Открыть папку recordings где сохраняются аудио файлы</string>
    </property>
   </action>
-  
   <action name="actionExit">
    <property name="text">
     <string>Выход</string>
@@ -249,7 +236,7 @@ QProgressBar::chunk {
   </action>
   <action name="actionAbout">
    <property name="text">
-    <string>О программе</string>
+    <string>💡 О программе</string>
    </property>
   </action>
  </widget>
@@ -260,6 +247,52 @@ QProgressBar::chunk {
    <signal>triggered()</signal>
    <receiver>MainWindow</receiver>
    <slot>close()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>-1</x>
+     <y>-1</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>20</x>
+     <y>20</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>actionAudioConfig</sender>
+   <signal>triggered()</signal>
+   <receiver>MainWindow</receiver>
+   <slot>onAudioConfigClicked()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>-1</x>
+     <y>-1</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>20</x>
+     <y>20</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>actionLoadFile</sender>
+   <signal>triggered()</signal>
+   <receiver>MainWindow</receiver>
+   <slot>onLoadFileClicked()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>-1</x>
+     <y>-1</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>20</x>
+     <y>20</y>
+    </hint>
+   </hints>
   </connection>
  </connections>
+ <slots>
+  <slot>onAudioConfigClicked()</slot>
+  <slot>onLoadFileClicked()</slot>
+ </slots>
 </ui>

@@ -31,7 +31,7 @@ SettingsDialog::SettingsDialog(QWidget *parent) :
             this, &SettingsDialog::onRefreshDevicesClicked);
 
     // Установка подсказок
-    ui->whisperPathEdit->setToolTip("Путь к исполняемому файлу whisper.cpp/main");
+    ui->whisperPathEdit->setToolTip("Путь к исполняемому файлу whisper.cpp/whisper-cli");
     ui->modelPathEdit->setToolTip("Путь к файлу модели whisper (.bin файл)");
     ui->audioDeviceComboBox->setToolTip("Выберите микрофон для записи");
 }

@@ -12,17 +12,21 @@ SOURCES += \
         main.cpp \
         mainwindow.cpp \
         settingsdialog.cpp \
-        speechrecognizer.cpp
-
+        speechrecognizer.cpp \
+        audioconfigdialog.cpp
 
 HEADERS += \
         mainwindow.h \
         settingsdialog.h \
-        speechrecognizer.h
-
+        speechrecognizer.h \
+        audioconfigdialog.h
 
 FORMS += \
         mainwindow.ui \
-        settingsdialog.ui
+        settingsdialog.ui \
+        audioconfigdialog.ui
 
-
+win32 {
+        RC_FILE += file.rc
+        OTHER_FILES += file.rc
+}
