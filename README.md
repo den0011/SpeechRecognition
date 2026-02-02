@@ -35,6 +35,8 @@
 Whisper.cpp - движок распознавания речи
 Скачать: https://github.com/ggerganov/whisper.cpp
 
+Рекомендуется: whisper-bin (Assets) 
+
 Модели Whisper - файлы для распознавания (.bin формат)
 Скачать: https://huggingface.co/ggerganov/whisper.cpp/tree/main
 
