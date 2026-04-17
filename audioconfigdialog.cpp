@@ -1,7 +1,6 @@
 #include "audioconfigdialog.h"
 #include "ui_audioconfigdialog.h"
 
-#include <QAudioDeviceInfo>
 #include <QAudioFormat>
 #include <QFileDialog>
 #include <QMessageBox>
@@ -123,9 +122,9 @@ void AudioConfigDialog::setupAudioRecorder()
     m_audioRecorder->setContainerFormat("audio/x-wav");
     
     // Устанавливаем устройство по умолчанию
-    QAudioDeviceInfo defaultDevice = QAudioDeviceInfo::defaultInputDevice();
-    if (!defaultDevice.isNull()) {
-        m_audioRecorder->setAudioInput(defaultDevice.deviceName());
+    const QString defaultInput = m_audioRecorder->defaultAudioInput();
+    if (!defaultInput.isEmpty()) {
+        m_audioRecorder->setAudioInput(defaultInput);
     }
 }
 
@@ -352,10 +351,11 @@ void AudioConfigDialog::onCancelClicked()
 void AudioConfigDialog::onRefreshDevicesClicked()
 {
     QStringList devices;
-    QList<QAudioDeviceInfo> audioDevices = QAudioDeviceInfo::availableDevices(QAudio::AudioInput);
-    
-    for (const QAudioDeviceInfo &deviceInfo : audioDevices) {
-        devices.append(deviceInfo.deviceName());
+    const QStringList inputs = m_audioRecorder->audioInputs();
+
+    for (const QString &inputId : inputs) {
+        const QString description = m_audioRecorder->audioInputDescription(inputId).trimmed();
+        devices.append(description.isEmpty() ? inputId : description);
     }
     
     setAvailableAudioDevices(devices);

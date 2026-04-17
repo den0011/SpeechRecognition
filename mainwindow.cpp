@@ -136,11 +136,22 @@ void MainWindow::onClearLogsClicked()
 void MainWindow::onSettingsClicked()
 {
     SettingsDialog dialog(this);
+    auto modeToString = [](SpeechRecognizer::PerformanceMode mode) {
+        switch (mode) {
+            case SpeechRecognizer::FastMode:
+                return QString("fast");
+            case SpeechRecognizer::AccurateMode:
+                return QString("accurate");
+            default:
+                return QString("balanced");
+        }
+    };
 
     // Устанавливаем текущие значения
     dialog.setWhisperPath(m_recognizer->getWhisperPath());
     dialog.setModelPath(m_recognizer->getModelPath());
     dialog.setLanguage(m_recognizer->getLanguage());
+    dialog.setPerformanceMode(modeToString(m_recognizer->getPerformanceMode()));
     
     // Загружаем доступные аудио устройства
     QStringList audioDevices = m_recognizer->getAvailableAudioDevices();
@@ -158,6 +169,13 @@ void MainWindow::onSettingsClicked()
         m_recognizer->setModelPath(dialog.getModelPath());
         m_recognizer->setLanguage(dialog.getLanguage());
         m_recognizer->setAudioDevice(dialog.getAudioDevice());
+        if (dialog.getPerformanceMode() == "fast") {
+            m_recognizer->setPerformanceMode(SpeechRecognizer::FastMode);
+        } else if (dialog.getPerformanceMode() == "accurate") {
+            m_recognizer->setPerformanceMode(SpeechRecognizer::AccurateMode);
+        } else {
+            m_recognizer->setPerformanceMode(SpeechRecognizer::BalancedMode);
+        }
 
         // Сохраняем в настройки приложения
         saveSettings();
@@ -277,6 +295,7 @@ void MainWindow::loadSettings()
     QString modelPath = settings.value("ModelPath", "").toString();
     QString language = settings.value("Language", "ru").toString();
     QString audioDevice = settings.value("AudioDevice", "").toString();
+    QString performanceMode = settings.value("PerformanceMode", "balanced").toString();
 
     if (!whisperPath.isEmpty()) {
         m_recognizer->setWhisperPath(whisperPath);
@@ -294,6 +313,13 @@ void MainWindow::loadSettings()
     }
 
     m_recognizer->setLanguage(language);
+    if (performanceMode == "fast") {
+        m_recognizer->setPerformanceMode(SpeechRecognizer::FastMode);
+    } else if (performanceMode == "accurate") {
+        m_recognizer->setPerformanceMode(SpeechRecognizer::AccurateMode);
+    } else {
+        m_recognizer->setPerformanceMode(SpeechRecognizer::BalancedMode);
+    }
     
     if (!audioDevice.isEmpty()) {
         m_recognizer->setAudioDevice(audioDevice);
@@ -310,11 +336,18 @@ void MainWindow::loadSettings()
 void MainWindow::saveSettings()
 {
     QSettings settings("MyCompany", "SpeechRecognition");
+    QString performanceMode = "balanced";
+    if (m_recognizer->getPerformanceMode() == SpeechRecognizer::FastMode) {
+        performanceMode = "fast";
+    } else if (m_recognizer->getPerformanceMode() == SpeechRecognizer::AccurateMode) {
+        performanceMode = "accurate";
+    }
 
     settings.setValue("WhisperPath", m_recognizer->getWhisperPath());
     settings.setValue("ModelPath", m_recognizer->getModelPath());
     settings.setValue("Language", m_recognizer->getLanguage());
     settings.setValue("AudioDevice", m_recognizer->getAudioDevice());
+    settings.setValue("PerformanceMode", performanceMode);
     
     addLog("Настройки сохранены в реестр", "INFO");
 }

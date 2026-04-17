@@ -2,15 +2,21 @@
 #define SPEECHRECOGNIZER_H
 
 #include <QObject>
+#include <QElapsedTimer>
 #include <QProcess>
 #include <QAudioRecorder>
-#include <QAudioDeviceInfo>
 #include <QUrl>
 
 class SpeechRecognizer : public QObject
 {
     Q_OBJECT
 public:
+    enum PerformanceMode {
+        FastMode,
+        BalancedMode,
+        AccurateMode
+    };
+
     explicit SpeechRecognizer(QObject *parent = nullptr);
     ~SpeechRecognizer();
 
@@ -23,11 +29,13 @@ public:
     void setLanguage(const QString &lang);
     void setAudioDevice(const QString &deviceName);
     void setAudioSettings(int sampleRate, int bitRate, int channels);
+    void setPerformanceMode(PerformanceMode mode);
 
     QString getWhisperPath() const;
     QString getModelPath() const;
     QString getLanguage() const;
     QString getAudioDevice() const;
+    PerformanceMode getPerformanceMode() const;
     
     QStringList getAvailableAudioDevices() const;
 
@@ -44,6 +52,12 @@ private slots:
 
 private:
     void applyAudioSettings();
+    QStringList getRecorderAudioInputs() const;
+    QString getAudioInputDescription(const QString &inputId) const;
+    QString resolveAudioInputId(const QString &deviceName) const;
+    int recommendedWhisperThreads() const;
+    QString effectiveModelPath() const;
+    QString preferredModelNameForMode() const;
 
 private:
     QAudioRecorder *m_audioRecorder;
@@ -53,11 +67,13 @@ private:
     QString m_modelPath;
     QString m_language;
     QString m_audioDeviceName;
+    PerformanceMode m_performanceMode;
     
     // Настраиваемые параметры аудио
     int m_sampleRate;
     int m_bitRate;
     int m_channelCount;
+    QElapsedTimer m_recognitionTimer;
 };
 
 #endif // SPEECHRECOGNIZER_H

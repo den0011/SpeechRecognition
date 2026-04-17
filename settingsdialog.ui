@@ -137,7 +137,7 @@
        </widget>
       </item>
       <item row="3" column="1">
-       <layout class="QHBoxLayout" name="horizontalLayout_4">
+        <layout class="QHBoxLayout" name="horizontalLayout_4">
         <item>
          <widget class="QComboBox" name="audioDeviceComboBox">
           <property name="toolTip">
@@ -161,7 +161,51 @@
           </property>
          </widget>
         </item>
-       </layout>
+        </layout>
+      </item>
+      <item row="4" column="0">
+       <widget class="QLabel" name="performanceModeLabel">
+        <property name="text">
+         <string>Режим скорости:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="4" column="1">
+       <widget class="QComboBox" name="performanceModeComboBox">
+        <item>
+         <property name="text">
+          <string>Быстро</string>
+         </property>
+         <property name="toolTip">
+          <string>Максимальная скорость, при наличии будет использована tiny-модель</string>
+         </property>
+         <property name="whatsThis">
+          <string>fast</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Баланс</string>
+         </property>
+         <property name="toolTip">
+          <string>Сбалансированный режим, при наличии будет использована base-модель</string>
+         </property>
+         <property name="whatsThis">
+          <string>balanced</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Точно</string>
+         </property>
+         <property name="toolTip">
+          <string>Приоритет качества, при наличии будет использована small-модель</string>
+         </property>
+         <property name="whatsThis">
+          <string>accurate</string>
+         </property>
+        </item>
+       </widget>
       </item>
      </layout>
     </widget>

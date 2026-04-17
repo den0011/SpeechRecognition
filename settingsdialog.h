@@ -19,11 +19,13 @@ public:
     QString getModelPath() const;
     QString getLanguage() const;
     QString getAudioDevice() const;
+    QString getPerformanceMode() const;
 
     void setWhisperPath(const QString &path);
     void setModelPath(const QString &path);
     void setLanguage(const QString &language);
     void setAudioDevice(const QString &device);
+    void setPerformanceMode(const QString &mode);
     
     void setAvailableAudioDevices(const QStringList &devices);
 

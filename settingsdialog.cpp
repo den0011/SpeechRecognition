@@ -11,14 +11,10 @@ SettingsDialog::SettingsDialog(QWidget *parent) :
 {
     ui->setupUi(this);
 
-    // Установка заголовка окна
-    setWindowTitle("Настройки - Распознавание речи");
-
-    // Настройка размеров окна
+    setWindowTitle("РќР°СЃС‚СЂРѕР№РєРё - Р Р°СЃРїРѕР·РЅР°РІР°РЅРёРµ СЂРµС‡Рё");
     setMinimumSize(650, 600);
     resize(650, 600);
 
-    // Подключение слотов
     connect(ui->browseWhisperButton, &QPushButton::clicked,
             this, &SettingsDialog::onBrowseWhisperClicked);
     connect(ui->browseModelButton, &QPushButton::clicked,
@@ -30,10 +26,13 @@ SettingsDialog::SettingsDialog(QWidget *parent) :
     connect(ui->refreshDevicesButton, &QPushButton::clicked,
             this, &SettingsDialog::onRefreshDevicesClicked);
 
-    // Установка подсказок
-    ui->whisperPathEdit->setToolTip("Путь к исполняемому файлу whisper.cpp/whisper-cli");
-    ui->modelPathEdit->setToolTip("Путь к файлу модели whisper (.bin файл)");
-    ui->audioDeviceComboBox->setToolTip("Выберите микрофон для записи");
+    ui->whisperPathEdit->setToolTip("РџСѓС‚СЊ Рє РёСЃРїРѕР»РЅСЏРµРјРѕРјСѓ С„Р°Р№Р»Сѓ whisper.cpp/whisper-cli");
+    ui->modelPathEdit->setToolTip("РџСѓС‚СЊ Рє С„Р°Р№Р»Сѓ РјРѕРґРµР»Рё whisper (.bin С„Р°Р№Р»)");
+    ui->audioDeviceComboBox->setToolTip("Р’С‹Р±РµСЂРёС‚Рµ РјРёРєСЂРѕС„РѕРЅ РґР»СЏ Р·Р°РїРёСЃРё");
+    ui->performanceModeComboBox->setItemData(0, "fast");
+    ui->performanceModeComboBox->setItemData(1, "balanced");
+    ui->performanceModeComboBox->setItemData(2, "accurate");
+    ui->performanceModeComboBox->setCurrentIndex(1);
 }
 
 SettingsDialog::~SettingsDialog()
@@ -59,6 +58,11 @@ QString SettingsDialog::getLanguage() const
 QString SettingsDialog::getAudioDevice() const
 {
     return ui->audioDeviceComboBox->currentText();
+}
+
+QString SettingsDialog::getPerformanceMode() const
+{
+    return ui->performanceModeComboBox->currentData().toString();
 }
 
 void SettingsDialog::setWhisperPath(const QString &path)
@@ -87,12 +91,20 @@ void SettingsDialog::setAudioDevice(const QString &device)
     }
 }
 
+void SettingsDialog::setPerformanceMode(const QString &mode)
+{
+    int index = ui->performanceModeComboBox->findData(mode);
+    if (index != -1) {
+        ui->performanceModeComboBox->setCurrentIndex(index);
+    }
+}
+
 void SettingsDialog::setAvailableAudioDevices(const QStringList &devices)
 {
     ui->audioDeviceComboBox->clear();
-    
+
     if (devices.isEmpty()) {
-        ui->audioDeviceComboBox->addItem("Устройства не найдены");
+        ui->audioDeviceComboBox->addItem("РЈСЃС‚СЂРѕР№СЃС‚РІР° РЅРµ РЅР°Р№РґРµРЅС‹");
         ui->audioDeviceComboBox->setEnabled(false);
     } else {
         ui->audioDeviceComboBox->addItems(devices);
@@ -104,9 +116,9 @@ void SettingsDialog::onBrowseWhisperClicked()
 {
     QString homeDir = QStandardPaths::writableLocation(QStandardPaths::HomeLocation);
     QString fileName = QFileDialog::getOpenFileName(this,
-        "Выберите исполняемый файл whisper",
+        "Р’С‹Р±РµСЂРёС‚Рµ РёСЃРїРѕР»РЅСЏРµРјС‹Р№ С„Р°Р№Р» whisper",
         homeDir,
-        "Исполняемые файлы (*);;Все файлы (*.*)");
+        "РСЃРїРѕР»РЅСЏРµРјС‹Рµ С„Р°Р№Р»С‹ (*);;Р’СЃРµ С„Р°Р№Р»С‹ (*.*)");
 
     if (!fileName.isEmpty()) {
         ui->whisperPathEdit->setText(fileName);
@@ -117,9 +129,9 @@ void SettingsDialog::onBrowseModelClicked()
 {
     QString homeDir = QStandardPaths::writableLocation(QStandardPaths::HomeLocation);
     QString fileName = QFileDialog::getOpenFileName(this,
-        "Выберите файл модели whisper",
+        "Р’С‹Р±РµСЂРёС‚Рµ С„Р°Р№Р» РјРѕРґРµР»Рё whisper",
         homeDir,
-        "Модели whisper (*.bin);;Все файлы (*.*)");
+        "РњРѕРґРµР»Рё whisper (*.bin);;Р’СЃРµ С„Р°Р№Р»С‹ (*.*)");
 
     if (!fileName.isEmpty()) {
         ui->modelPathEdit->setText(fileName);
@@ -129,21 +141,21 @@ void SettingsDialog::onBrowseModelClicked()
 void SettingsDialog::onSaveClicked()
 {
     if (ui->whisperPathEdit->text().isEmpty()) {
-        QMessageBox::warning(this, "Предупреждение",
-            "Пожалуйста, укажите путь к whisper");
+        QMessageBox::warning(this, "РџСЂРµРґСѓРїСЂРµР¶РґРµРЅРёРµ",
+            "РџРѕР¶Р°Р»СѓР№СЃС‚Р°, СѓРєР°Р¶РёС‚Рµ РїСѓС‚СЊ Рє whisper");
         return;
     }
 
     if (ui->modelPathEdit->text().isEmpty()) {
-        QMessageBox::warning(this, "Предупреждение",
-            "Пожалуйста, укажите путь к модели");
+        QMessageBox::warning(this, "РџСЂРµРґСѓРїСЂРµР¶РґРµРЅРёРµ",
+            "РџРѕР¶Р°Р»СѓР№СЃС‚Р°, СѓРєР°Р¶РёС‚Рµ РїСѓС‚СЊ Рє РјРѕРґРµР»Рё");
         return;
     }
-    
-    if (ui->audioDeviceComboBox->currentText() == "Устройства не найдены") {
-        QMessageBox::warning(this, "Предупреждение",
-            "Не найдено ни одного устройства записи звука.\n"
-            "Подключите микрофон и перезапустите программу.");
+
+    if (ui->audioDeviceComboBox->currentText() == "РЈСЃС‚СЂРѕР№СЃС‚РІР° РЅРµ РЅР°Р№РґРµРЅС‹") {
+        QMessageBox::warning(this, "РџСЂРµРґСѓРїСЂРµР¶РґРµРЅРёРµ",
+            "РќРµ РЅР°Р№РґРµРЅРѕ РЅРё РѕРґРЅРѕРіРѕ СѓСЃС‚СЂРѕР№СЃС‚РІР° Р·Р°РїРёСЃРё Р·РІСѓРєР°.\n"
+            "РџРѕРґРєР»СЋС‡РёС‚Рµ РјРёРєСЂРѕС„РѕРЅ Рё РїРµСЂРµР·Р°РїСѓСЃС‚РёС‚Рµ РїСЂРѕРіСЂР°РјРјСѓ.");
         return;
     }
 
@@ -157,6 +169,5 @@ void SettingsDialog::onCancelClicked()
 
 void SettingsDialog::onRefreshDevicesClicked()
 {
-    // Запрашиваем обновленный список устройств у родительского окна
     emit refreshAudioDevices();
 }
