@@ -11,7 +11,7 @@ SettingsDialog::SettingsDialog(QWidget *parent) :
 {
     ui->setupUi(this);
 
-    setWindowTitle("РќР°СЃС‚СЂРѕР№РєРё - Р Р°СЃРїРѕР·РЅР°РІР°РЅРёРµ СЂРµС‡Рё");
+    setWindowTitle("Настройки - Распознавание речи");
     setMinimumSize(650, 600);
     resize(650, 600);
 
@@ -26,9 +26,9 @@ SettingsDialog::SettingsDialog(QWidget *parent) :
     connect(ui->refreshDevicesButton, &QPushButton::clicked,
             this, &SettingsDialog::onRefreshDevicesClicked);
 
-    ui->whisperPathEdit->setToolTip("РџСѓС‚СЊ Рє РёСЃРїРѕР»РЅСЏРµРјРѕРјСѓ С„Р°Р№Р»Сѓ whisper.cpp/whisper-cli");
-    ui->modelPathEdit->setToolTip("РџСѓС‚СЊ Рє С„Р°Р№Р»Сѓ РјРѕРґРµР»Рё whisper (.bin С„Р°Р№Р»)");
-    ui->audioDeviceComboBox->setToolTip("Р’С‹Р±РµСЂРёС‚Рµ РјРёРєСЂРѕС„РѕРЅ РґР»СЏ Р·Р°РїРёСЃРё");
+    ui->whisperPathEdit->setToolTip("Путь к исполняемому файлу whisper.cpp/whisper-cli");
+    ui->modelPathEdit->setToolTip("Путь к файлу модели whisper (.bin файл)");
+    ui->audioDeviceComboBox->setToolTip("Выберите микрофон для записи");
     ui->performanceModeComboBox->setItemData(0, "fast");
     ui->performanceModeComboBox->setItemData(1, "balanced");
     ui->performanceModeComboBox->setItemData(2, "accurate");
@@ -104,7 +104,7 @@ void SettingsDialog::setAvailableAudioDevices(const QStringList &devices)
     ui->audioDeviceComboBox->clear();
 
     if (devices.isEmpty()) {
-        ui->audioDeviceComboBox->addItem("РЈСЃС‚СЂРѕР№СЃС‚РІР° РЅРµ РЅР°Р№РґРµРЅС‹");
+        ui->audioDeviceComboBox->addItem("Устройства не найдены");
         ui->audioDeviceComboBox->setEnabled(false);
     } else {
         ui->audioDeviceComboBox->addItems(devices);
@@ -116,9 +116,9 @@ void SettingsDialog::onBrowseWhisperClicked()
 {
     QString homeDir = QStandardPaths::writableLocation(QStandardPaths::HomeLocation);
     QString fileName = QFileDialog::getOpenFileName(this,
-        "Р’С‹Р±РµСЂРёС‚Рµ РёСЃРїРѕР»РЅСЏРµРјС‹Р№ С„Р°Р№Р» whisper",
+        "Выберите исполняемый файл whisper",
         homeDir,
-        "РСЃРїРѕР»РЅСЏРµРјС‹Рµ С„Р°Р№Р»С‹ (*);;Р’СЃРµ С„Р°Р№Р»С‹ (*.*)");
+        "Исполняемые файлы (*);;Все файлы (*.*)");
 
     if (!fileName.isEmpty()) {
         ui->whisperPathEdit->setText(fileName);
@@ -129,9 +129,9 @@ void SettingsDialog::onBrowseModelClicked()
 {
     QString homeDir = QStandardPaths::writableLocation(QStandardPaths::HomeLocation);
     QString fileName = QFileDialog::getOpenFileName(this,
-        "Р’С‹Р±РµСЂРёС‚Рµ С„Р°Р№Р» РјРѕРґРµР»Рё whisper",
+        "Выберите файл модели whisper",
         homeDir,
-        "РњРѕРґРµР»Рё whisper (*.bin);;Р’СЃРµ С„Р°Р№Р»С‹ (*.*)");
+        "Модели whisper (*.bin);;Все файлы (*.*)");
 
     if (!fileName.isEmpty()) {
         ui->modelPathEdit->setText(fileName);
@@ -141,21 +141,21 @@ void SettingsDialog::onBrowseModelClicked()
 void SettingsDialog::onSaveClicked()
 {
     if (ui->whisperPathEdit->text().isEmpty()) {
-        QMessageBox::warning(this, "РџСЂРµРґСѓРїСЂРµР¶РґРµРЅРёРµ",
-            "РџРѕР¶Р°Р»СѓР№СЃС‚Р°, СѓРєР°Р¶РёС‚Рµ РїСѓС‚СЊ Рє whisper");
+        QMessageBox::warning(this, "Предупреждение",
+            "Пожалуйста, укажите путь к whisper");
         return;
     }
 
     if (ui->modelPathEdit->text().isEmpty()) {
-        QMessageBox::warning(this, "РџСЂРµРґСѓРїСЂРµР¶РґРµРЅРёРµ",
-            "РџРѕР¶Р°Р»СѓР№СЃС‚Р°, СѓРєР°Р¶РёС‚Рµ РїСѓС‚СЊ Рє РјРѕРґРµР»Рё");
+        QMessageBox::warning(this, "Предупреждение",
+            "Пожалуйста, укажите путь к модели");
         return;
     }
 
-    if (ui->audioDeviceComboBox->currentText() == "РЈСЃС‚СЂРѕР№СЃС‚РІР° РЅРµ РЅР°Р№РґРµРЅС‹") {
-        QMessageBox::warning(this, "РџСЂРµРґСѓРїСЂРµР¶РґРµРЅРёРµ",
-            "РќРµ РЅР°Р№РґРµРЅРѕ РЅРё РѕРґРЅРѕРіРѕ СѓСЃС‚СЂРѕР№СЃС‚РІР° Р·Р°РїРёСЃРё Р·РІСѓРєР°.\n"
-            "РџРѕРґРєР»СЋС‡РёС‚Рµ РјРёРєСЂРѕС„РѕРЅ Рё РїРµСЂРµР·Р°РїСѓСЃС‚РёС‚Рµ РїСЂРѕРіСЂР°РјРјСѓ.");
+    if (ui->audioDeviceComboBox->currentText() == "Устройства не найдены") {
+        QMessageBox::warning(this, "Предупреждение",
+            "Не найдено ни одного устройства записи звука.\n"
+            "Подключите микрофон и перезапустите программу.");
         return;
     }
 

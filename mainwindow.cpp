@@ -2,6 +2,7 @@
 #include "ui_mainwindow.h"
 #include "settingsdialog.h"
 #include "audioconfigdialog.h"
+#include "downloaddialog.h"
 
 #include <QDebug>
 #include <QDateTime>
@@ -14,6 +15,9 @@
 #include <QCoreApplication>
 #include <QProcess>
 #include <QDir>
+#include <QScrollBar>
+#include <QThread>
+#include <QTextBlock>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -24,6 +28,7 @@ MainWindow::MainWindow(QWidget *parent)
 
     // Создаем распознаватель речи
     m_recognizer = new SpeechRecognizer(this);
+    m_realtime = new RealtimeRecognizer(this);
 
     // Инициализируем таймер записи
     m_recordingTimer = new QTimer(this);
@@ -53,9 +58,31 @@ MainWindow::MainWindow(QWidget *parent)
     connect(m_recognizer, &SpeechRecognizer::recordingStopped,
             this, &MainWindow::onRecordingStopped);
 
+    // Сигналы режима реального времени
+    connect(m_realtime, &RealtimeRecognizer::started,
+            this, &MainWindow::onRecordingStarted);
+    connect(m_realtime, &RealtimeRecognizer::stopped,
+            this, &MainWindow::onRecordingStopped);
+    connect(m_realtime, &RealtimeRecognizer::finished,
+            this, &MainWindow::onRealtimeFinished);
+    connect(m_realtime, &RealtimeRecognizer::finalText,
+            this, &MainWindow::onRealtimeFinalText);
+    connect(m_realtime, &RealtimeRecognizer::partialText,
+            ui->partialLabel, &QLabel::setText);
+    connect(m_realtime, &RealtimeRecognizer::levelChanged,
+            ui->levelBar, &QProgressBar::setValue);
+    connect(m_realtime, &RealtimeRecognizer::error,
+            this, &MainWindow::onError);
+    connect(m_realtime, &RealtimeRecognizer::log,
+            this, &MainWindow::addLog);
+
     // Подключаем пункты меню
     connect(ui->actionSettings, &QAction::triggered,
             this, &MainWindow::onSettingsClicked);
+    QAction *downloadAction = new QAction("⬇ Скачать Whisper и модели", this);
+    downloadAction->setToolTip("Автоматически скачать whisper.cpp и модель распознавания");
+    ui->menuFile->insertAction(ui->actionSettings, downloadAction);
+    connect(downloadAction, &QAction::triggered, this, &MainWindow::onDownloadClicked);
     connect(ui->actionOpenRecordings, &QAction::triggered,
             this, &MainWindow::onOpenRecordingsClicked);
     connect(ui->actionAbout, &QAction::triggered, this, [this]() {
@@ -296,6 +323,7 @@ void MainWindow::loadSettings()
     QString language = settings.value("Language", "ru").toString();
     QString audioDevice = settings.value("AudioDevice", "").toString();
     QString performanceMode = settings.value("PerformanceMode", "balanced").toString();
+    ui->realtimeCheckBox->setChecked(settings.value("RealtimeMode", true).toBool());
 
     if (!whisperPath.isEmpty()) {
         m_recognizer->setWhisperPath(whisperPath);
@@ -348,6 +376,7 @@ void MainWindow::saveSettings()
     settings.setValue("Language", m_recognizer->getLanguage());
     settings.setValue("AudioDevice", m_recognizer->getAudioDevice());
     settings.setValue("PerformanceMode", performanceMode);
+    settings.setValue("RealtimeMode", ui->realtimeCheckBox->isChecked());
     
     addLog("Настройки сохранены в реестр", "INFO");
 }
@@ -483,14 +512,17 @@ void MainWindow::showModelNotFoundWarning()
         "Без этих компонентов программа не сможет работать."
     );
 
+    QPushButton *downloadButton = msgBox.addButton("⬇ Скачать автоматически", QMessageBox::ActionRole);
     QPushButton *settingsButton = msgBox.addButton("Открыть настройки", QMessageBox::ActionRole);
     QPushButton *audioButton = msgBox.addButton("Настроить микрофон", QMessageBox::ActionRole);
     msgBox.addButton("Понятно", QMessageBox::RejectRole);
 
-    msgBox.setDefaultButton(settingsButton);
+    msgBox.setDefaultButton(downloadButton);
     msgBox.exec();
 
-    if (msgBox.clickedButton() == settingsButton) {
+    if (msgBox.clickedButton() == downloadButton) {
+        onDownloadClicked();
+    } else if (msgBox.clickedButton() == settingsButton) {
         onSettingsClicked();
     } else if (msgBox.clickedButton() == audioButton) {
         onAudioConfigClicked();
@@ -504,20 +536,114 @@ void MainWindow::onRecordButtonClicked()
     }
 
     if (!m_isRecording) {
+        if (ui->realtimeCheckBox->isChecked()) {
+            startRealtime();
+            return;
+        }
         addLog("Начинаем запись...", "INFO");
         m_recognizer->startRecording();
         m_isRecording = true;
     } else {
         addLog("Останавливаем запись...", "INFO");
-        m_recognizer->stopRecording();
+        if (m_realtime->isRunning()) {
+            m_realtime->stop();
+        } else {
+            m_recognizer->stopRecording();
+        }
         m_isRecording = false;
     }
 }
 
+QString MainWindow::recordingsDirectory() const
+{
+    QString recordingsDir = QCoreApplication::applicationDirPath() + "/recordings";
+    if (!QDir().mkpath(recordingsDir)) {
+        recordingsDir = QStandardPaths::writableLocation(QStandardPaths::TempLocation);
+    }
+    return recordingsDir;
+}
+
+void MainWindow::startRealtime()
+{
+    addLog("Запуск распознавания в реальном времени...", "INFO");
+
+    const QString timestamp = QDateTime::currentDateTime().toString("yyyy-MM-dd_HH-mm-ss");
+    m_realtime->setWhisperPath(m_recognizer->getWhisperPath());
+    m_realtime->setModelPath(m_recognizer->effectiveModelPath());
+    addLog("Модель: " + QFileInfo(m_recognizer->effectiveModelPath()).fileName(), "INFO");
+    m_realtime->setLanguage(m_recognizer->getLanguage());
+    m_realtime->setAudioDevice(m_recognizer->getAudioDevice());
+    // В реальном времени распознавание — основная нагрузка, отдаём ему все ядра
+    m_realtime->setThreads(qBound(1, QThread::idealThreadCount(), 8));
+    m_realtime->setCompactFinals(m_recognizer->getPerformanceMode() == SpeechRecognizer::FastMode);
+    m_realtime->setRecordingFile(recordingsDirectory() + "/recording_" + timestamp + ".wav");
+
+    m_realtime->start();
+    m_isRecording = m_realtime->isRunning();
+}
+
+void MainWindow::onRealtimeFinalText(const QString &text)
+{
+    QTextCursor cursor(ui->textEdit->document());
+    cursor.movePosition(QTextCursor::End);
+    if (!cursor.block().text().isEmpty()) {
+        cursor.insertText(" ");
+    }
+    cursor.insertText(text);
+    ui->textEdit->verticalScrollBar()->setValue(ui->textEdit->verticalScrollBar()->maximum());
+}
+
+void MainWindow::onDownloadClicked()
+{
+    if (m_isRecording) {
+        QMessageBox::information(this, "Загрузка", "Сначала остановите запись.");
+        return;
+    }
+
+    // whisper-server держит файлы программы открытыми — останавливаем перед обновлением
+    m_realtime->shutdownServer();
+
+    DownloadDialog dialog(m_recognizer->getWhisperPath(), m_recognizer->getModelPath(), this);
+    dialog.exec();
+
+    bool changed = false;
+    if (QFile::exists(dialog.whisperPath()) && dialog.whisperPath() != m_recognizer->getWhisperPath()) {
+        m_recognizer->setWhisperPath(dialog.whisperPath());
+        addLog("Whisper: " + dialog.whisperPath(), "SUCCESS");
+        changed = true;
+    }
+    if (QFile::exists(dialog.modelPath()) && dialog.modelPath() != m_recognizer->getModelPath()) {
+        m_recognizer->setModelPath(dialog.modelPath());
+        addLog("Модель: " + dialog.modelPath(), "SUCCESS");
+        changed = true;
+    }
+    if (changed) {
+        saveSettings();
+        if (QFile::exists(m_recognizer->getWhisperPath()) && QFile::exists(m_recognizer->getModelPath())) {
+            addLog("Компоненты найдены: Whisper и модель", "SUCCESS");
+            ui->statusLabel->setText("Готов к записи");
+        }
+    }
+}
+
+void MainWindow::onRealtimeFinished()
+{
+    ui->partialLabel->clear();
+    ui->statusLabel->setText("✓ Готово");
+    ui->recordButton->setEnabled(true);
+    ui->realtimeCheckBox->setEnabled(true);
+    ui->timerLabel->setVisible(false);
+    ui->textEdit->append("");
+    addLog("Распознавание в реальном времени завершено", "SUCCESS");
+}
+
 void MainWindow::onRecordingStarted()
 {
+    const bool realtime = m_realtime->isRunning();
     ui->recordButton->setText("⏹ Остановить запись");
-    ui->statusLabel->setText("🔴 Идет запись...");
+    ui->realtimeCheckBox->setEnabled(false);
+    ui->statusLabel->setText(realtime ? "🔴 Идет запись — говорите, текст появляется после каждой паузы"
+                                      : "🔴 Идет запись...");
     ui->textEdit->append("\n--- " + QDateTime::currentDateTime().toString("hh:mm:ss") + " Запись началась ---");
     ui->textEdit->append("Микрофон: " + m_recognizer->getAudioDevice() + "\n");
     
@@ -538,9 +664,13 @@ void MainWindow::onRecordingStopped()
 {
     ui->recordButton->setText("🎤 Начать запись");
     ui->recordButton->setEnabled(false);
-    ui->statusLabel->setText("⏳ Обработка аудио...");
-    ui->textEdit->append("--- Обработка... ---\n");
-    
+    if (sender() == m_realtime) {
+        ui->statusLabel->setText("⏳ Распознавание последней фразы...");
+    } else {
+        ui->statusLabel->setText("⏳ Обработка аудио...");
+        ui->textEdit->append("--- Обработка... ---\n");
+    }
+
     m_recordingTimer->stop();
     qint64 elapsed = m_elapsedTimer.elapsed();
     int seconds = (elapsed / 1000) % 60;
@@ -557,9 +687,10 @@ void MainWindow::onRecognitionComplete(const QString &text)
     ui->textEdit->append("✅ Результат: " + text + "\n");
     ui->statusLabel->setText("✓ Готово");
     ui->recordButton->setEnabled(true);
-    
+    ui->realtimeCheckBox->setEnabled(true);
+
     ui->timerLabel->setVisible(false);
-    
+
     addLog("Распознавание завершено успешно", "SUCCESS");
     addLog("Результат: " + text.left(50) + (text.length() > 50 ? "..." : ""), "INFO");
 }
@@ -570,8 +701,10 @@ void MainWindow::onError(const QString &error)
     ui->statusLabel->setText("❌ Ошибка");
     ui->recordButton->setEnabled(true);
     ui->recordButton->setText("🎤 Начать запись");
+    ui->realtimeCheckBox->setEnabled(true);
+    ui->partialLabel->clear();
     m_isRecording = false;
-    
+
     m_recordingTimer->stop();
     ui->timerLabel->setVisible(false);
     

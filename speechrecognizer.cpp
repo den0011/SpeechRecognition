@@ -236,7 +236,7 @@ void SpeechRecognizer::startRecording()
 {
     const QStringList inputs = getRecorderAudioInputs();
     if (inputs.isEmpty()) {
-        emit error("РќРµ РЅР°Р№РґРµРЅРѕ РЅРё РѕРґРЅРѕРіРѕ СѓСЃС‚СЂРѕР№СЃС‚РІР° Р·Р°РїРёСЃРё Р·РІСѓРєР°. РџРѕРґРєР»СЋС‡РёС‚Рµ РјРёРєСЂРѕС„РѕРЅ.");
+        emit error("Не найдено ни одного устройства записи звука. Подключите микрофон.");
         return;
     }
 
@@ -295,7 +295,7 @@ void SpeechRecognizer::onRecordingFinished()
 
     QFile audioFile(m_tempAudioFile);
     if (!audioFile.exists()) {
-        emit error("РђСѓРґРёРѕ С„Р°Р№Р» РЅРµ Р±С‹Р» СЃРѕР·РґР°РЅ. РџСЂРѕРІРµСЂСЊС‚Рµ РїСЂР°РІР° РґРѕСЃС‚СѓРїР° Рє РјРёРєСЂРѕС„РѕРЅСѓ.");
+        emit error("Аудио файл не был создан. Проверьте права доступа к микрофону.");
         return;
     }
 
@@ -303,7 +303,7 @@ void SpeechRecognizer::onRecordingFinished()
     qDebug() << "Audio file size:" << fileSize << "bytes";
 
     if (fileSize < 1000) {
-        emit error("РђСѓРґРёРѕ С„Р°Р№Р» СЃР»РёС€РєРѕРј РјР°Р». Р’РѕР·РјРѕР¶РЅРѕ, РјРёРєСЂРѕС„РѕРЅ РЅРµ Р·Р°РїРёСЃС‹РІР°РµС‚ Р·РІСѓРє.");
+        emit error("Аудио файл слишком мал. Возможно, микрофон не записывает звук.");
         return;
     }
 
@@ -313,17 +313,17 @@ void SpeechRecognizer::onRecordingFinished()
 void SpeechRecognizer::recognizeFromFile(const QString &audioFile)
 {
     if (!QFile::exists(audioFile)) {
-        emit error("РђСѓРґРёРѕ С„Р°Р№Р» РЅРµ РЅР°Р№РґРµРЅ: " + audioFile);
+        emit error("Аудио файл не найден: " + audioFile);
         return;
     }
 
     if (!QFile::exists(m_whisperPath)) {
-        emit error("Whisper РЅРµ РЅР°Р№РґРµРЅ: " + m_whisperPath);
+        emit error("Whisper не найден: " + m_whisperPath);
         return;
     }
 
     if (!QFile::exists(m_modelPath)) {
-        emit error("Р¤Р°Р№Р» РјРѕРґРµР»Рё РЅРµ РЅР°Р№РґРµРЅ: " + m_modelPath);
+        emit error("Файл модели не найден: " + m_modelPath);
         return;
     }
 
@@ -355,7 +355,7 @@ void SpeechRecognizer::recognizeFromFile(const QString &audioFile)
     m_whisperProcess->start(m_whisperPath, arguments);
 
     if (!m_whisperProcess->waitForStarted(3000)) {
-        emit error("РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РїСѓСЃС‚РёС‚СЊ Whisper. РџСЂРѕРІРµСЂСЊС‚Рµ РїСѓС‚СЊ Рє РёСЃРїРѕР»РЅСЏРµРјРѕРјСѓ С„Р°Р№Р»Сѓ.");
+        emit error("Не удалось запустить Whisper. Проверьте путь к исполняемому файлу.");
     }
 }
 
@@ -404,23 +404,23 @@ void SpeechRecognizer::onWhisperFinished(int exitCode, QProcess::ExitStatus exit
             emit recognitionComplete(recognizedText);
         } else {
             if (isDeprecatedWarning) {
-                emit error("РўРµРєСЃС‚ РЅРµ СЂР°СЃРїРѕР·РЅР°РЅ. Whisper СЂР°Р±РѕС‚Р°РµС‚, РЅРѕ РЅРµ РѕР±РЅР°СЂСѓР¶РёР» СЂРµС‡Рё.\n"
-                          "РџСЂРёРјРµС‡Р°РЅРёРµ: Р РµРєРѕРјРµРЅРґСѓРµС‚СЃСЏ РёСЃРїРѕР»СЊР·РѕРІР°С‚СЊ whisper-cli.exe РІРјРµСЃС‚Рѕ main.exe");
+                emit error("Текст не распознан. Whisper работает, но не обнаружил речи.\n"
+                          "Примечание: Рекомендуется использовать whisper-cli.exe вместо main.exe");
             } else {
-                emit error("РўРµРєСЃС‚ РЅРµ СЂР°СЃРїРѕР·РЅР°РЅ. Р’РѕР·РјРѕР¶РЅРѕ, РІ Р·Р°РїРёСЃРё РЅРµС‚ СЂРµС‡Рё РёР»Рё РѕРЅР° СЃР»РёС€РєРѕРј С‚РёС…Р°СЏ.");
+                emit error("Текст не распознан. Возможно, в записи нет речи или она слишком тихая.");
             }
         }
     } else if (!isDeprecatedWarning) {
-        QString errorMsg = "РћС€РёР±РєР° Whisper (РєРѕРґ: " + QString::number(exitCode) + ")";
+        QString errorMsg = "Ошибка Whisper (код: " + QString::number(exitCode) + ")";
 
         if (!errorOutput.isEmpty()) {
-            errorMsg += "\nР”РµС‚Р°Р»Рё: " + errorOutput;
+            errorMsg += "\nДетали: " + errorOutput;
         }
 
         if (errorOutput.contains("Could not open")) {
-            errorMsg = "РќРµ СѓРґР°Р»РѕСЃСЊ РѕС‚РєСЂС‹С‚СЊ Р°СѓРґРёРѕ С„Р°Р№Р». Р’РѕР·РјРѕР¶РЅРѕ, С„РѕСЂРјР°С‚ РЅРµ РїРѕРґРґРµСЂР¶РёРІР°РµС‚СЃСЏ.";
+            errorMsg = "Не удалось открыть аудио файл. Возможно, формат не поддерживается.";
         } else if (errorOutput.contains("model")) {
-            errorMsg = "РћС€РёР±РєР° Р·Р°РіСЂСѓР·РєРё РјРѕРґРµР»Рё. РџСЂРѕРІРµСЂСЊС‚Рµ РїСЂР°РІРёР»СЊРЅРѕСЃС‚СЊ С„Р°Р№Р»Р° РјРѕРґРµР»Рё.";
+            errorMsg = "Ошибка загрузки модели. Проверьте правильность файла модели.";
         }
 
         emit error(errorMsg);
@@ -432,25 +432,25 @@ void SpeechRecognizer::onWhisperError(QProcess::ProcessError error)
     QString errorMsg;
     switch (error) {
         case QProcess::FailedToStart:
-            errorMsg = "РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РїСѓСЃС‚РёС‚СЊ Whisper. РџСЂРѕРІРµСЂСЊС‚Рµ:\n"
-                      "1. РџСЂР°РІРёР»СЊРЅРѕСЃС‚СЊ РїСѓС‚Рё Рє РёСЃРїРѕР»РЅСЏРµРјРѕРјСѓ С„Р°Р№Р»Сѓ\n"
-                      "2. РСЃРїРѕР»СЊР·СѓР№С‚Рµ whisper-cli.exe РІРјРµСЃС‚Рѕ main.exe\n"
-                      "3. РџСЂР°РІР° РЅР° РІС‹РїРѕР»РЅРµРЅРёРµ (Linux/Mac: chmod +x)";
+            errorMsg = "Не удалось запустить Whisper. Проверьте:\n"
+                      "1. Правильность пути к исполняемому файлу\n"
+                      "2. Используйте whisper-cli.exe вместо main.exe\n"
+                      "3. Права на выполнение (Linux/Mac: chmod +x)";
             break;
         case QProcess::Crashed:
-            errorMsg = "РџСЂРѕС†РµСЃСЃ Whisper Р·Р°РІРµСЂС€РёР»СЃСЏ Р°РІР°СЂРёР№РЅРѕ";
+            errorMsg = "Процесс Whisper завершился аварийно";
             break;
         case QProcess::Timedout:
-            errorMsg = "РџСЂРµРІС‹С€РµРЅРѕ РІСЂРµРјСЏ РѕР¶РёРґР°РЅРёСЏ Whisper";
+            errorMsg = "Превышено время ожидания Whisper";
             break;
         case QProcess::ReadError:
-            errorMsg = "РћС€РёР±РєР° С‡С‚РµРЅРёСЏ РІС‹РІРѕРґР° Whisper";
+            errorMsg = "Ошибка чтения вывода Whisper";
             break;
         case QProcess::WriteError:
-            errorMsg = "РћС€РёР±РєР° Р·Р°РїРёСЃРё РІ Whisper";
+            errorMsg = "Ошибка записи в Whisper";
             break;
         default:
-            errorMsg = "РќРµРёР·РІРµСЃС‚РЅР°СЏ РѕС€РёР±РєР° РїСЂРѕС†РµСЃСЃР° Whisper: " + QString::number(error);
+            errorMsg = "Неизвестная ошибка процесса Whisper: " + QString::number(error);
     }
 
     emit this->error(errorMsg);

@@ -39,6 +39,9 @@ public:
     
     QStringList getAvailableAudioDevices() const;
 
+    int recommendedWhisperThreads() const;
+    QString effectiveModelPath() const;
+
 signals:
     void recognitionComplete(const QString &text);
     void error(const QString &errorMsg);
@@ -55,8 +58,6 @@ private:
     QStringList getRecorderAudioInputs() const;
     QString getAudioInputDescription(const QString &inputId) const;
     QString resolveAudioInputId(const QString &deviceName) const;
-    int recommendedWhisperThreads() const;
-    QString effectiveModelPath() const;
     QString preferredModelNameForMode() const;
 
 private:

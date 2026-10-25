@@ -1,4 +1,4 @@
-QT       += core gui multimedia
+QT       += core gui multimedia network
 
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
@@ -13,12 +13,16 @@ SOURCES += \
         mainwindow.cpp \
         settingsdialog.cpp \
         speechrecognizer.cpp \
+        realtimerecognizer.cpp \
+        downloaddialog.cpp \
         audioconfigdialog.cpp
 
 HEADERS += \
         mainwindow.h \
         settingsdialog.h \
         speechrecognizer.h \
+        realtimerecognizer.h \
+        downloaddialog.h \
         audioconfigdialog.h
 
 FORMS += \

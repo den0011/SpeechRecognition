@@ -6,6 +6,7 @@
 #include <QElapsedTimer>
 
 #include "speechrecognizer.h"
+#include "realtimerecognizer.h"
 
 namespace Ui {
 class MainWindow;
@@ -35,6 +36,9 @@ private slots:
     void onOpenRecordingsClicked();
     void onAudioConfigClicked();
     void onLoadFileClicked();
+    void onRealtimeFinalText(const QString &text);
+    void onRealtimeFinished();
+    void onDownloadClicked();
 
 private:
     void loadSettings();
@@ -44,10 +48,13 @@ private:
     bool checkComponentsBeforeRecording();
     void addLog(const QString &message, const QString &level = "INFO");
     void applyAudioSettings();
+    void startRealtime();
+    QString recordingsDirectory() const;
 
 private:
     Ui::MainWindow *ui;
     SpeechRecognizer *m_recognizer;
+    RealtimeRecognizer *m_realtime;
     bool m_isRecording;
     QTimer *m_recordingTimer;
     QElapsedTimer m_elapsedTimer;
