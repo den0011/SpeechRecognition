@@ -88,11 +88,14 @@ MainWindow::MainWindow(QWidget *parent)
     connect(ui->actionAbout, &QAction::triggered, this, [this]() {
         QMessageBox::about(this, "О программе",
             "<h3>Голос в текст - Whisper</h3>"
-            "<p>Версия 1.2</p>"
+            "<p>Версия 1.3</p>"
             "<p>Программа для распознавания речи с использованием Whisper.cpp</p>"
+            "<p>Исходный код: <a href='https://github.com/den0011/SpeechRecognition'>"
+            "github.com/den0011/SpeechRecognition</a></p>"
             "<br>"
             "<p><b>Возможности:</b></p>"
             "<ul>"
+            "<li>Распознавание в реальном времени — текст появляется во время речи</li>"
             "<li>Запись голоса с микрофона</li>"
             "<li>Распознавание аудио файлов</li>"
             "<li>Настройка параметров микрофона</li>"
@@ -107,7 +110,7 @@ MainWindow::MainWindow(QWidget *parent)
             "<li>Микрофон для записи звука</li>"
             "</ul>"
             "<br>"
-            "<p>Ссылки для скачивания доступны в меню <b>Файл → Настройки</b></p>"
+            "<p>Whisper и модели можно скачать автоматически: <b>Файл → Скачать Whisper и модели</b></p>"
             "<br>"
             "<p style='color: #666;'>Разработано с использованием Qt и Whisper.cpp</p>");
     });

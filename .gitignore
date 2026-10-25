@@ -56,3 +56,4 @@ whisper-bin-Win32
 ggml-base.bin
 ggml-base
 release/
+dist/
