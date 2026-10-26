@@ -7,6 +7,7 @@
 
 #include "speechrecognizer.h"
 #include "realtimerecognizer.h"
+#include "dictation.h"
 
 namespace Ui {
 class MainWindow;
@@ -39,6 +40,10 @@ private slots:
     void onRealtimeFinalText(const QString &text);
     void onRealtimeFinished();
     void onDownloadClicked();
+    void onHotkeyActivated();
+    void onNoSignal();
+    void onCopyTextClicked();
+    void onSaveTextClicked();
 
 private:
     void loadSettings();
@@ -49,12 +54,19 @@ private:
     void addLog(const QString &message, const QString &level = "INFO");
     void applyAudioSettings();
     void startRealtime();
+    void applyHotkey();
+    void deliverDictation(const QString &text);
+    QString vadModelIfEnabled() const;
     QString recordingsDirectory() const;
 
 private:
     Ui::MainWindow *ui;
     SpeechRecognizer *m_recognizer;
     RealtimeRecognizer *m_realtime;
+    GlobalHotkey *m_hotkey;
+    QString m_hotkeyName;
+    bool m_useVad;
+    bool m_dictationStarted;
     bool m_isRecording;
     QTimer *m_recordingTimer;
     QElapsedTimer m_elapsedTimer;

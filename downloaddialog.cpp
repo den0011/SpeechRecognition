@@ -24,7 +24,11 @@
 namespace {
 const char *kReleasesApi = "https://api.github.com/repos/ggml-org/whisper.cpp/releases?per_page=30";
 const char *kModelsBaseUrl = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/";
+const char *kVadUrl = "https://huggingface.co/ggml-org/whisper-vad/resolve/main/ggml-silero-v6.2.0.bin";
+const char *kVadFile = "ggml-silero-v6.2.0.bin";
+const qint64 kVadSize = 885098;
 const char *kUserAgent = "SpeechRecognition-Qt";
+const char *kVariantFile = "variant.txt";
 }
 
 DownloadDialog::DownloadDialog(const QString &currentWhisperPath, const QString &currentModelPath,
@@ -41,14 +45,19 @@ DownloadDialog::DownloadDialog(const QString &currentWhisperPath, const QString 
     , m_cancelled(false)
 {
     setWindowTitle("Загрузка Whisper и моделей");
-    setMinimumSize(680, 460);
+    setMinimumSize(700, 520);
 
+    // Размеры нужны только для индикатора прогресса
     m_models = {
-        { "ggml-tiny.bin",           "tiny — 75 МБ, самая быстрая, качество низкое",       77691713LL },
-        { "ggml-base.bin",           "base — 142 МБ, рекомендуется для реального времени", 147951465LL },
-        { "ggml-small.bin",          "small — 466 МБ, точнее, но медленнее",               487601967LL },
-        { "ggml-medium.bin",         "medium — 1.5 ГБ, высокая точность, медленно на CPU", 1533763059LL },
-        { "ggml-large-v3-turbo.bin", "large-v3-turbo — 1.6 ГБ, лучшее качество, нужна мощная машина", 1624555275LL },
+        { "ggml-tiny.bin",                "tiny — 75 МБ, самая быстрая, качество низкое",                   77691713LL },
+        { "ggml-base-q5_1.bin",           "base-q5_1 — 57 МБ, качество как у base, файл в 2.5 раза меньше", 59707625LL },
+        { "ggml-base.bin",                "base — 142 МБ, рекомендуется для реального времени",             147951465LL },
+        { "ggml-small-q5_1.bin",          "small-q5_1 — 181 МБ, точнее base, нужен быстрый процессор",      190085487LL },
+        { "ggml-small.bin",               "small — 466 МБ, точнее base, медленнее",                         487601967LL },
+        { "ggml-medium-q5_0.bin",         "medium-q5_0 — 514 МБ, высокая точность, для видеокарты",         539212467LL },
+        { "ggml-large-v3-turbo-q5_0.bin", "large-v3-turbo-q5_0 — 547 МБ, лучшее качество, для видеокарты",  574041195LL },
+        { "ggml-medium.bin",              "medium — 1.5 ГБ, высокая точность, очень медленно на CPU",       1533763059LL },
+        { "ggml-large-v3-turbo.bin",      "large-v3-turbo — 1.6 ГБ, лучшее качество, для видеокарты",       1624555275LL },
     };
 
     auto *layout = new QVBoxLayout(this);
@@ -63,11 +72,29 @@ DownloadDialog::DownloadDialog(const QString &currentWhisperPath, const QString 
     layout->addWidget(intro);
 
     auto *form = new QFormLayout;
-    m_binCheck = new QCheckBox("whisper-cli + whisper-server (~9 МБ)");
+
+    m_binCheck = new QCheckBox("whisper-cli + whisper-server");
+    m_variantCombo = new QComboBox;
+    const bool win32 = QSysInfo::buildCpuArchitecture() == "i386";
+    m_variantCombo->addItem("Процессор (CPU) — ~9 МБ, работает везде", "cpu");
+    m_variantCombo->addItem("Процессор + OpenBLAS — ~21 МБ, обычно быстрее обычной", "blas");
+    if (!win32) {
+        m_variantCombo->addItem("Видеокарта NVIDIA, CUDA 12 — ~650 МБ, в разы быстрее", "cuda12");
+        m_variantCombo->addItem("Видеокарта NVIDIA, CUDA 11.8 — ~270 МБ, для старых драйверов", "cuda11");
+    }
     m_binStatus = new QLabel;
+    m_binStatus->setWordWrap(true);
     auto *binBox = new QVBoxLayout;
-    binBox->addWidget(m_binCheck);
+    auto *binRow = new QHBoxLayout;
+    binRow->addWidget(m_binCheck);
+    binRow->addWidget(m_variantCombo, 1);
+    binBox->addLayout(binRow);
     binBox->addWidget(m_binStatus);
+    if (hasNvidiaGpu() && !win32) {
+        auto *gpuHint = new QLabel("💡 Обнаружена видеокарта NVIDIA — сборка CUDA распознаёт в разы быстрее");
+        gpuHint->setWordWrap(true);
+        binBox->addWidget(gpuHint);
+    }
     form->addRow("Программа:", binBox);
 
     m_modelCombo = new QComboBox;
@@ -80,6 +107,10 @@ DownloadDialog::DownloadDialog(const QString &currentWhisperPath, const QString 
     modelBox->addWidget(m_modelCombo);
     modelBox->addWidget(m_modelStatus);
     form->addRow("Модель:", modelBox);
+
+    m_vadCheck = new QCheckBox("Фильтр шума Silero VAD (0.9 МБ)");
+    m_vadCheck->setToolTip("Отсекает шум и музыку, уменьшает «выдуманный» текст. Включается в настройках.");
+    form->addRow("Шумоподавление:", m_vadCheck);
     layout->addLayout(form);
 
     m_stepLabel = new QLabel;
@@ -105,19 +136,20 @@ DownloadDialog::DownloadDialog(const QString &currentWhisperPath, const QString 
     connect(m_startButton, &QPushButton::clicked, this, &DownloadDialog::onStartClicked);
     connect(m_closeButton, &QPushButton::clicked, this, &DownloadDialog::onCancelClicked);
     connect(m_modelCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this]() { refreshState(); });
+    connect(m_variantCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this]() { refreshState(); });
     connect(m_binCheck, &QCheckBox::toggled, this, [this]() { refreshState(); });
     connect(&m_progressTimer, &QTimer::timeout, this, &DownloadDialog::onProgressTick);
     m_progressTimer.setInterval(300);
 
     // Начальное состояние: отмечаем то, чего не хватает
-    const bool haveBinaries = !findWhisperCli().isEmpty() || QFile::exists(currentWhisperPath);
+    const bool haveBinaries = !findInstalledWhisper().isEmpty() || QFile::exists(currentWhisperPath);
     m_binCheck->setChecked(!haveBinaries);
-
-    int modelIndex = m_modelCombo->findData("ggml-base.bin");
-    if (QFile::exists(currentModelPath)) {
-        modelIndex = 0;
+    const int variantIndex = m_variantCombo->findData(installedVariant());
+    if (variantIndex >= 0) {
+        m_variantCombo->setCurrentIndex(variantIndex);
     }
-    m_modelCombo->setCurrentIndex(modelIndex);
+    m_modelCombo->setCurrentIndex(QFile::exists(currentModelPath) ? 0 : m_modelCombo->findData("ggml-base.bin"));
+    m_vadCheck->setChecked(!QFile::exists(vadModelPath()));
 
     refreshState();
 }
@@ -158,9 +190,76 @@ QString DownloadDialog::installDirectory()
     return fallback;
 }
 
-QString DownloadDialog::binaryArchiveName()
+QString DownloadDialog::findInstalledWhisper()
 {
-    return QSysInfo::buildCpuArchitecture() == "i386" ? "whisper-bin-Win32.zip" : "whisper-bin-x64.zip";
+    QDirIterator it(installDirectory() + "/bin", QStringList() << "whisper-cli.exe" << "whisper-cli",
+                    QDir::Files, QDirIterator::Subdirectories);
+    return it.hasNext() ? it.next() : QString();
+}
+
+QString DownloadDialog::findInstalledModel()
+{
+    // Предпочтение — base, затем любая другая модель распознавания (не VAD)
+    const QDir modelsDir(installDirectory() + "/models");
+    const QStringList preferred = { "ggml-base.bin", "ggml-base-q5_1.bin", "ggml-small-q5_1.bin", "ggml-small.bin" };
+    for (const QString &name : preferred) {
+        if (modelsDir.exists(name)) {
+            return modelsDir.filePath(name);
+        }
+    }
+    for (const QString &name : modelsDir.entryList(QStringList() << "ggml-*.bin", QDir::Files)) {
+        if (!name.contains("silero")) {
+            return modelsDir.filePath(name);
+        }
+    }
+    return QString();
+}
+
+QString DownloadDialog::vadModelPath()
+{
+    return installDirectory() + "/models/" + kVadFile;
+}
+
+QString DownloadDialog::installedVariant()
+{
+    QFile file(installDirectory() + "/bin/" + kVariantFile);
+    if (file.open(QIODevice::ReadOnly)) {
+        return QString::fromUtf8(file.readAll()).trimmed();
+    }
+    return QString();
+}
+
+bool DownloadDialog::hasNvidiaGpu()
+{
+#ifdef Q_OS_WIN
+    // nvidia-smi ставится вместе с драйвером NVIDIA
+    return QFile::exists("C:/Windows/System32/nvidia-smi.exe") ||
+           !QStandardPaths::findExecutable("nvidia-smi").isEmpty();
+#else
+    return !QStandardPaths::findExecutable("nvidia-smi").isEmpty();
+#endif
+}
+
+QString DownloadDialog::selectedVariant() const
+{
+    return m_variantCombo->currentData().toString();
+}
+
+bool DownloadDialog::assetMatches(const QString &assetName) const
+{
+    const QString name = assetName.toLower();
+    const bool win32 = QSysInfo::buildCpuArchitecture() == "i386";
+    const QString variant = selectedVariant();
+    if (variant == "cpu") {
+        return name == (win32 ? "whisper-bin-win32.zip" : "whisper-bin-x64.zip");
+    }
+    if (variant == "blas") {
+        return name == (win32 ? "whisper-blas-bin-win32.zip" : "whisper-blas-bin-x64.zip");
+    }
+    // Имена CUDA-сборок менялись: whisper-cublas-12.4.0-bin-x64.zip, whisper-bin-win-cuda-12.4.0-x64.zip
+    const QString cudaMajor = variant == "cuda12" ? "12" : "11";
+    return name.endsWith(".zip") && name.contains("x64") && !name.contains("arm64") &&
+           (name.contains("cuda-" + cudaMajor) || name.contains("cublas-" + cudaMajor));
 }
 
 QString DownloadDialog::formatSize(qint64 bytes)
@@ -169,14 +268,6 @@ QString DownloadDialog::formatSize(qint64 bytes)
         return QString::number(bytes / (1024.0 * 1024 * 1024), 'f', 2) + " ГБ";
     }
     return QString::number(bytes / (1024.0 * 1024), 'f', 1) + " МБ";
-}
-
-QString DownloadDialog::findWhisperCli() const
-{
-    const QString binDir = installDirectory() + "/bin";
-    QDirIterator it(binDir, QStringList() << "whisper-cli.exe" << "whisper-cli",
-                    QDir::Files, QDirIterator::Subdirectories);
-    return it.hasNext() ? it.next() : QString();
 }
 
 QString DownloadDialog::selectedModelFile() const
@@ -197,9 +288,14 @@ qint64 DownloadDialog::selectedModelSize() const
 
 void DownloadDialog::refreshState()
 {
-    const QString installedCli = findWhisperCli();
+    m_variantCombo->setEnabled(m_binCheck->isChecked() && m_step == Idle);
+
+    const QString installedCli = findInstalledWhisper();
     if (!installedCli.isEmpty()) {
-        m_binStatus->setText("✓ Уже установлена: " + QDir::toNativeSeparators(installedCli));
+        const int index = m_variantCombo->findData(installedVariant());
+        const QString variantName = index >= 0 ? m_variantCombo->itemText(index).section(" — ", 0, 0) : QString();
+        m_binStatus->setText("✓ Установлена" + (variantName.isEmpty() ? QString() : " (" + variantName + ")")
+                             + ": " + QDir::toNativeSeparators(installedCli));
     } else if (QFile::exists(m_whisperPath)) {
         m_binStatus->setText("✓ Используется: " + QDir::toNativeSeparators(m_whisperPath));
     } else {
@@ -216,6 +312,10 @@ void DownloadDialog::refreshState()
     } else {
         m_modelStatus->setText("Будет скачано " + formatSize(selectedModelSize()));
     }
+
+    if (QFile::exists(vadModelPath())) {
+        m_vadCheck->setText("Фильтр шума Silero VAD — ✓ уже скачан");
+    }
 }
 
 void DownloadDialog::appendLog(const QString &message)
@@ -227,14 +327,17 @@ void DownloadDialog::setBusy(bool busy)
 {
     m_startButton->setEnabled(!busy);
     m_binCheck->setEnabled(!busy);
+    m_variantCombo->setEnabled(!busy && m_binCheck->isChecked());
     m_modelCombo->setEnabled(!busy);
+    m_vadCheck->setEnabled(!busy);
     m_closeButton->setText(busy ? "Отмена" : "Закрыть");
 }
 
 void DownloadDialog::onStartClicked()
 {
-    if (!m_binCheck->isChecked() && selectedModelFile().isEmpty()) {
-        appendLog("Нечего скачивать: отметьте программу или выберите модель");
+    const bool wantVad = m_vadCheck->isChecked() && !QFile::exists(vadModelPath());
+    if (!m_binCheck->isChecked() && selectedModelFile().isEmpty() && !wantVad) {
+        appendLog("Нечего скачивать: отметьте программу, выберите модель или фильтр шума");
         return;
     }
     if (QStandardPaths::findExecutable("curl").isEmpty()) {
@@ -284,28 +387,36 @@ void DownloadDialog::nextStep()
     case Idle:
         if (m_binCheck->isChecked()) {
             fetchRelease();
-            return;
+        } else {
+            startModelDownload();
         }
-        break;
+        return;
     case FetchRelease:
         m_step = DownloadBinaries;
         m_stepLabel->setText("Скачивание whisper.cpp " + m_releaseTag + "...");
-        downloadFile(m_assetUrl, installDirectory() + "/" + binaryArchiveName(), m_assetSize);
+        downloadFile(m_assetUrl, installDirectory() + "/" + m_assetName, m_assetSize);
         return;
     case DownloadBinaries:
         extractBinaries();
         return;
     case ExtractBinaries:
-        break;
+        startModelDownload();
+        return;
     case DownloadModel:
+        startVadDownload();
+        return;
+    case DownloadVad:
         finishAll();
         return;
     }
+}
 
-    // Модель
+void DownloadDialog::startModelDownload()
+{
+    m_step = DownloadModel;
     const QString file = selectedModelFile();
     if (file.isEmpty()) {
-        finishAll();
+        startVadDownload();
         return;
     }
     const QString modelsDir = installDirectory() + "/models";
@@ -314,13 +425,24 @@ void DownloadDialog::nextStep()
     if (QFile::exists(target)) {
         appendLog("Модель уже скачана: " + QDir::toNativeSeparators(target));
         m_modelPath = target;
-        finishAll();
+        startVadDownload();
         return;
     }
 
-    m_step = DownloadModel;
     m_stepLabel->setText("Скачивание модели " + file + "...");
     downloadFile(QString(kModelsBaseUrl) + file, target + ".part", selectedModelSize());
+}
+
+void DownloadDialog::startVadDownload()
+{
+    m_step = DownloadVad;
+    if (!m_vadCheck->isChecked() || QFile::exists(vadModelPath())) {
+        finishAll();
+        return;
+    }
+    QDir().mkpath(installDirectory() + "/models");
+    m_stepLabel->setText("Скачивание фильтра шума Silero VAD...");
+    downloadFile(kVadUrl, vadModelPath() + ".part", kVadSize);
 }
 
 void DownloadDialog::fetchRelease()
@@ -328,6 +450,7 @@ void DownloadDialog::fetchRelease()
     m_step = FetchRelease;
     m_downloadTarget.clear();
     m_assetUrl.clear();
+    m_assetName.clear();
     m_stepLabel->setText("Поиск последней версии whisper.cpp...");
     m_progress->setRange(0, 0);
     appendLog("Запрос списка релизов на GitHub");
@@ -385,7 +508,7 @@ void DownloadDialog::extractBinaries()
     m_progress->setRange(0, 0);
     m_stepLabel->setText("Распаковка...");
 
-    const QString archive = installDirectory() + "/" + binaryArchiveName();
+    const QString archive = installDirectory() + "/" + m_assetName;
     const QString binDir = installDirectory() + "/bin";
     QDir(binDir).removeRecursively();
     QDir().mkpath(binDir);
@@ -424,9 +547,8 @@ void DownloadDialog::onProcessFinished(int exitCode, QProcess::ExitStatus exitSt
 
     switch (m_step) {
     case FetchRelease: {
-        // У тегов vX.Y.Z файлов может не быть — берём первый релиз, где есть сборка под Windows
+        // У тегов vX.Y.Z файлов может не быть — берём первый релиз, где есть нужная сборка
         const QJsonArray releases = QJsonDocument::fromJson(output).array();
-        const QString wanted = binaryArchiveName();
         for (const QJsonValue &release : releases) {
             const QJsonObject rel = release.toObject();
             if (rel.value("draft").toBool()) {
@@ -434,7 +556,8 @@ void DownloadDialog::onProcessFinished(int exitCode, QProcess::ExitStatus exitSt
             }
             for (const QJsonValue &asset : rel.value("assets").toArray()) {
                 const QJsonObject a = asset.toObject();
-                if (a.value("name").toString() == wanted) {
+                if (assetMatches(a.value("name").toString())) {
+                    m_assetName = a.value("name").toString();
                     m_assetUrl = a.value("browser_download_url").toString();
                     m_assetSize = static_cast<qint64>(a.value("size").toDouble());
                     m_releaseTag = rel.value("tag_name").toString();
@@ -446,10 +569,10 @@ void DownloadDialog::onProcessFinished(int exitCode, QProcess::ExitStatus exitSt
             }
         }
         if (m_assetUrl.isEmpty()) {
-            fail("Не найден архив " + wanted + " в релизах whisper.cpp");
+            fail("В релизах whisper.cpp не найдена сборка: " + m_variantCombo->currentText());
             return;
         }
-        appendLog("Найдена версия " + m_releaseTag + " (" + formatSize(m_assetSize) + ")");
+        appendLog("Найдена версия " + m_releaseTag + ": " + m_assetName + " (" + formatSize(m_assetSize) + ")");
         break;
     }
     case DownloadBinaries:
@@ -457,11 +580,15 @@ void DownloadDialog::onProcessFinished(int exitCode, QProcess::ExitStatus exitSt
         m_downloadTarget.clear();
         break;
     case ExtractBinaries: {
-        QFile::remove(installDirectory() + "/" + binaryArchiveName());
-        const QString cli = findWhisperCli();
+        QFile::remove(installDirectory() + "/" + m_assetName);
+        const QString cli = findInstalledWhisper();
         if (cli.isEmpty()) {
             fail("В архиве не найден whisper-cli");
             return;
+        }
+        QFile variantFile(installDirectory() + "/bin/" + kVariantFile);
+        if (variantFile.open(QIODevice::WriteOnly)) {
+            variantFile.write(selectedVariant().toUtf8());
         }
         m_whisperPath = cli;
         appendLog("Установлено: " + QDir::toNativeSeparators(cli));
@@ -471,16 +598,21 @@ void DownloadDialog::onProcessFinished(int exitCode, QProcess::ExitStatus exitSt
         }
         break;
     }
-    case DownloadModel: {
+    case DownloadModel:
+    case DownloadVad: {
         const QString finalPath = m_downloadTarget.left(m_downloadTarget.size() - 5); // без ".part"
         QFile::remove(finalPath);
         if (!QFile::rename(m_downloadTarget, finalPath)) {
-            fail("Не удалось сохранить модель: " + finalPath);
+            fail("Не удалось сохранить файл: " + finalPath);
             return;
         }
         m_downloadTarget.clear();
-        m_modelPath = finalPath;
-        appendLog("Модель сохранена: " + QDir::toNativeSeparators(finalPath));
+        if (m_step == DownloadModel) {
+            m_modelPath = finalPath;
+            appendLog("Модель сохранена: " + QDir::toNativeSeparators(finalPath));
+        } else {
+            appendLog("Фильтр шума сохранён. Включите его в «Файл → Настройки → Шумоподавление».");
+        }
         break;
     }
     case Idle:
@@ -501,6 +633,7 @@ void DownloadDialog::finishAll()
     m_closeButton->setText("Готово");
     m_binCheck->setChecked(false);
     m_modelCombo->setCurrentIndex(0);
+    m_vadCheck->setChecked(false);
     appendLog("Все компоненты готовы. Пути сохранятся в настройках после закрытия окна.");
     refreshState();
 }

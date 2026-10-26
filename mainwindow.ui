@@ -66,6 +66,27 @@
        </widget>
       </item>
       <item>
+       <widget class="QCheckBox" name="dictationCheckBox">
+        <property name="toolTip">
+         <string>Печатать распознанный текст в окно другой программы, где стоит курсор (Word, браузер, мессенджер).
+Удобно вместе с горячей клавишей из настроек.</string>
+        </property>
+        <property name="text">
+         <string>⌨ Вставлять в активное окно</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QCheckBox" name="timestampsCheckBox">
+        <property name="toolTip">
+         <string>Каждая фраза с новой строки с отметкой времени</string>
+        </property>
+        <property name="text">
+         <string>🕒 Время у фраз</string>
+        </property>
+       </widget>
+      </item>
+      <item>
        <widget class="QProgressBar" name="levelBar">
         <property name="maximumSize">
          <size>
@@ -148,6 +169,50 @@
        <bool>true</bool>
       </property>
      </widget>
+    </item>
+    <item>
+     <layout class="QHBoxLayout" name="textButtonsLayout">
+      <item>
+       <widget class="QPushButton" name="copyTextButton">
+        <property name="toolTip">
+         <string>Скопировать весь текст в буфер обмена</string>
+        </property>
+        <property name="text">
+         <string>📋 Копировать всё</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="saveTextButton">
+        <property name="toolTip">
+         <string>Сохранить текст в файл .txt</string>
+        </property>
+        <property name="text">
+         <string>💾 Сохранить в файл</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <spacer name="textButtonsSpacer">
+        <property name="orientation">
+         <enum>Qt::Horizontal</enum>
+        </property>
+        <property name="sizeHint" stdset="0">
+         <size>
+          <width>40</width>
+          <height>20</height>
+         </size>
+        </property>
+       </spacer>
+      </item>
+      <item>
+       <widget class="QPushButton" name="clearTextButton">
+        <property name="text">
+         <string>🗑 Очистить текст</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
     </item>
     <item>
      <widget class="QGroupBox" name="logGroupBox">

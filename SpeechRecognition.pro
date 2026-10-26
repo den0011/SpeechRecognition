@@ -15,6 +15,7 @@ SOURCES += \
         speechrecognizer.cpp \
         realtimerecognizer.cpp \
         downloaddialog.cpp \
+        dictation.cpp \
         audioconfigdialog.cpp
 
 HEADERS += \
@@ -23,6 +24,8 @@ HEADERS += \
         speechrecognizer.h \
         realtimerecognizer.h \
         downloaddialog.h \
+        dictation.h \
+        audiodevices.h \
         audioconfigdialog.h
 
 FORMS += \
@@ -31,6 +34,7 @@ FORMS += \
         audioconfigdialog.ui
 
 win32 {
+        LIBS += -luser32
         RC_FILE += file.rc
         OTHER_FILES += file.rc
 }

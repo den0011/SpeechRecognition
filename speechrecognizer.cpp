@@ -1,40 +1,21 @@
 #include "speechrecognizer.h"
+#include "audiodevices.h"
 
+#include <QCoreApplication>
 #include <QDebug>
 #include <QDir>
-#include <QStandardPaths>
 #include <QFile>
-#include <QCoreApplication>
-#include <QDateTime>
 #include <QFileInfo>
-#include <QDir>
 #include <QThread>
 
-QStringList SpeechRecognizer::getRecorderAudioInputs() const
+QString SpeechRecognizer::resolvePath(const QString &path)
 {
-    return m_audioRecorder->audioInputs();
-}
-
-QString SpeechRecognizer::getAudioInputDescription(const QString &inputId) const
-{
-    const QString description = m_audioRecorder->audioInputDescription(inputId).trimmed();
-    return description.isEmpty() ? inputId : description;
-}
-
-QString SpeechRecognizer::resolveAudioInputId(const QString &deviceName) const
-{
-    if (deviceName.isEmpty()) {
-        return QString();
+    // Относительные пути считаются от папки программы, а не от текущей рабочей папки,
+    // иначе при запуске из ярлыка whisper не находится
+    if (path.isEmpty() || QFileInfo(path).isAbsolute()) {
+        return path;
     }
-
-    const QStringList inputs = getRecorderAudioInputs();
-    for (const QString &inputId : inputs) {
-        if (inputId == deviceName || getAudioInputDescription(inputId) == deviceName) {
-            return inputId;
-        }
-    }
-
-    return QString();
+    return QDir::cleanPath(QDir(QCoreApplication::applicationDirPath()).absoluteFilePath(path));
 }
 
 int SpeechRecognizer::recommendedWhisperThreads() const
@@ -43,7 +24,7 @@ int SpeechRecognizer::recommendedWhisperThreads() const
     const int cappedThreads = (m_performanceMode == AccurateMode) ? 4 : 8;
 
     if (idealThreads <= 2) {
-        return 1;
+        return qMax(1, idealThreads);
     }
 
     if (idealThreads <= 4) {
@@ -53,82 +34,24 @@ int SpeechRecognizer::recommendedWhisperThreads() const
     return qMin(idealThreads, cappedThreads);
 }
 
-QString SpeechRecognizer::preferredModelNameForMode() const
+int SpeechRecognizer::beamSize() const
 {
-    switch (m_performanceMode) {
-        case FastMode:
-            return "ggml-tiny.bin";
-        case AccurateMode:
-            return "ggml-small.bin";
-        case BalancedMode:
-        default:
-            return "ggml-base.bin";
-    }
-}
-
-QString SpeechRecognizer::effectiveModelPath() const
-{
-    QFileInfo configuredModelInfo(m_modelPath);
-    if (!configuredModelInfo.exists()) {
-        return m_modelPath;
-    }
-
-    const QString preferredModelName = preferredModelNameForMode();
-    if (configuredModelInfo.fileName().compare(preferredModelName, Qt::CaseInsensitive) == 0) {
-        return m_modelPath;
-    }
-
-    const QString preferredPath = configuredModelInfo.dir().filePath(preferredModelName);
-    if (QFile::exists(preferredPath)) {
-        return preferredPath;
-    }
-
-    return m_modelPath;
+    // Режим «Точно» — поиск по 5 вариантам (beam search): точнее, примерно на 25% медленнее
+    return m_performanceMode == AccurateMode ? 5 : 0;
 }
 
 SpeechRecognizer::SpeechRecognizer(QObject *parent)
     : QObject(parent)
-    , m_audioRecorder(new QAudioRecorder(this))
     , m_whisperProcess(nullptr)
     , m_language("ru")
-    , m_audioDeviceName("")
     , m_performanceMode(BalancedMode)
-    , m_sampleRate(16000)
-    , m_bitRate(256000)
-    , m_channelCount(1)
 {
-    m_whisperPath = "./whisper.cpp/whisper-cli.exe";
-    m_modelPath = "./whisper.cpp/models/ggml-base.bin";
-
-    applyAudioSettings();
-
-    const QString defaultInput = m_audioRecorder->defaultAudioInput();
-    if (!defaultInput.isEmpty()) {
-        m_audioRecorder->setAudioInput(defaultInput);
-        m_audioDeviceName = getAudioInputDescription(defaultInput);
-        qDebug() << "Default audio device:" << m_audioDeviceName;
-    }
-
-    connect(m_audioRecorder, &QAudioRecorder::stateChanged,
-            this, [this](QMediaRecorder::State state) {
-        qDebug() << "Audio recorder state changed:" << state;
-        if (state == QMediaRecorder::StoppedState) {
-            onRecordingFinished();
-        }
-    });
-
-    connect(m_audioRecorder, QOverload<QMediaRecorder::Error>::of(&QAudioRecorder::error),
-            this, [this](QMediaRecorder::Error error) {
-        qDebug() << "Audio recorder error:" << error << m_audioRecorder->errorString();
-    });
+    m_whisperPath = resolvePath("whisper.cpp/whisper-cli.exe");
+    m_modelPath = resolvePath("whisper.cpp/models/ggml-base.bin");
 }
 
 SpeechRecognizer::~SpeechRecognizer()
 {
-    if (m_audioRecorder->state() == QMediaRecorder::RecordingState) {
-        m_audioRecorder->stop();
-    }
-
     if (m_whisperProcess) {
         m_whisperProcess->kill();
         m_whisperProcess->waitForFinished();
@@ -137,12 +60,12 @@ SpeechRecognizer::~SpeechRecognizer()
 
 void SpeechRecognizer::setWhisperPath(const QString &path)
 {
-    m_whisperPath = path;
+    m_whisperPath = resolvePath(path);
 }
 
 void SpeechRecognizer::setModelPath(const QString &path)
 {
-    m_modelPath = path;
+    m_modelPath = resolvePath(path);
 }
 
 void SpeechRecognizer::setLanguage(const QString &lang)
@@ -152,46 +75,14 @@ void SpeechRecognizer::setLanguage(const QString &lang)
 
 void SpeechRecognizer::setAudioDevice(const QString &deviceName)
 {
-    const QString inputId = resolveAudioInputId(deviceName);
-    if (!inputId.isEmpty()) {
-        m_audioRecorder->setAudioInput(inputId);
-        m_audioDeviceName = getAudioInputDescription(inputId);
-        qDebug() << "Audio device set to:" << m_audioDeviceName << "(" << inputId << ")";
-    } else if (!deviceName.isEmpty()) {
-        qDebug() << "Requested audio device not found:" << deviceName;
-    }
-}
-
-void SpeechRecognizer::setAudioSettings(int sampleRate, int bitRate, int channels)
-{
-    m_sampleRate = sampleRate;
-    m_bitRate = bitRate;
-    m_channelCount = channels;
-
-    applyAudioSettings();
-
-    qDebug() << "Audio settings updated:"
-             << "Sample rate:" << m_sampleRate
-             << "Bit rate:" << m_bitRate
-             << "Channels:" << m_channelCount;
+    const QStringList devices = AudioDevices::inputNames();
+    const int index = AudioDevices::matchName(devices, deviceName);
+    m_audioDeviceName = index >= 0 ? devices.at(index) : deviceName;
 }
 
 void SpeechRecognizer::setPerformanceMode(PerformanceMode mode)
 {
     m_performanceMode = mode;
-}
-
-void SpeechRecognizer::applyAudioSettings()
-{
-    QAudioEncoderSettings audioSettings;
-    audioSettings.setCodec("audio/pcm");
-    audioSettings.setSampleRate(m_sampleRate);
-    audioSettings.setChannelCount(m_channelCount);
-    audioSettings.setBitRate(m_bitRate);
-    audioSettings.setQuality(QMultimedia::HighQuality);
-
-    m_audioRecorder->setEncodingSettings(audioSettings);
-    m_audioRecorder->setContainerFormat("audio/x-wav");
 }
 
 QString SpeechRecognizer::getWhisperPath() const
@@ -221,93 +112,9 @@ SpeechRecognizer::PerformanceMode SpeechRecognizer::getPerformanceMode() const
 
 QStringList SpeechRecognizer::getAvailableAudioDevices() const
 {
-    QStringList devices;
-    const QStringList inputs = getRecorderAudioInputs();
-
-    for (const QString &inputId : inputs) {
-        devices.append(getAudioInputDescription(inputId));
-    }
-
+    const QStringList devices = AudioDevices::inputNames();
     qDebug() << "Available audio devices:" << devices;
     return devices;
-}
-
-void SpeechRecognizer::startRecording()
-{
-    const QStringList inputs = getRecorderAudioInputs();
-    if (inputs.isEmpty()) {
-        emit error("Не найдено ни одного устройства записи звука. Подключите микрофон.");
-        return;
-    }
-
-    QString inputId = resolveAudioInputId(m_audioDeviceName);
-    if (inputId.isEmpty()) {
-        inputId = m_audioRecorder->defaultAudioInput();
-        m_audioRecorder->setAudioInput(inputId);
-        m_audioDeviceName = getAudioInputDescription(inputId);
-        qDebug() << "Selected device not found, using default:" << m_audioDeviceName;
-    } else {
-        m_audioRecorder->setAudioInput(inputId);
-        m_audioDeviceName = getAudioInputDescription(inputId);
-    }
-
-    applyAudioSettings();
-
-    QString appDir = QCoreApplication::applicationDirPath();
-    QString recordingsDir = appDir + "/recordings";
-
-    QDir dir;
-    if (!dir.exists(recordingsDir)) {
-        if (!dir.mkpath(recordingsDir)) {
-            qDebug() << "Failed to create recordings directory, using temp";
-            recordingsDir = QStandardPaths::writableLocation(QStandardPaths::TempLocation);
-        } else {
-            qDebug() << "Created recordings directory:" << recordingsDir;
-        }
-    }
-
-    QString timestamp = QDateTime::currentDateTime().toString("yyyy-MM-dd_HH-mm-ss");
-    m_tempAudioFile = recordingsDir + "/recording_" + timestamp + ".wav";
-
-    QFile::remove(m_tempAudioFile);
-
-    m_audioRecorder->setOutputLocation(QUrl::fromLocalFile(m_tempAudioFile));
-    m_audioRecorder->record();
-
-    emit recordingStarted();
-    qDebug() << "Recording started to:" << m_tempAudioFile;
-    qDebug() << "Using device:" << m_audioDeviceName;
-    qDebug() << "Settings:" << m_sampleRate << "Hz," << m_bitRate << "bps," << m_channelCount << "ch";
-}
-
-void SpeechRecognizer::stopRecording()
-{
-    if (m_audioRecorder->state() == QMediaRecorder::RecordingState) {
-        m_audioRecorder->stop();
-        emit recordingStopped();
-        qDebug() << "Recording stopped";
-    }
-}
-
-void SpeechRecognizer::onRecordingFinished()
-{
-    qDebug() << "Recording finished, audio file:" << m_tempAudioFile;
-
-    QFile audioFile(m_tempAudioFile);
-    if (!audioFile.exists()) {
-        emit error("Аудио файл не был создан. Проверьте права доступа к микрофону.");
-        return;
-    }
-
-    qint64 fileSize = audioFile.size();
-    qDebug() << "Audio file size:" << fileSize << "bytes";
-
-    if (fileSize < 1000) {
-        emit error("Аудио файл слишком мал. Возможно, микрофон не записывает звук.");
-        return;
-    }
-
-    recognizeFromFile(m_tempAudioFile);
 }
 
 void SpeechRecognizer::recognizeFromFile(const QString &audioFile)
@@ -327,8 +134,6 @@ void SpeechRecognizer::recognizeFromFile(const QString &audioFile)
         return;
     }
 
-    const QString activeModelPath = effectiveModelPath();
-
     if (m_whisperProcess) {
         m_whisperProcess->deleteLater();
     }
@@ -341,16 +146,18 @@ void SpeechRecognizer::recognizeFromFile(const QString &audioFile)
             this, &SpeechRecognizer::onWhisperError);
 
     QStringList arguments;
-    arguments << "-m" << activeModelPath;
+    arguments << "-m" << m_modelPath;
     arguments << "-f" << audioFile;
     arguments << "-l" << m_language;
     arguments << "-t" << QString::number(recommendedWhisperThreads());
+    if (beamSize() > 0) {
+        arguments << "-bs" << QString::number(beamSize());
+    }
     arguments << "--no-timestamps";
     arguments << "-nt";
 
     m_recognitionTimer.restart();
     qDebug() << "Running:" << m_whisperPath << arguments;
-    qDebug() << "Configured model:" << m_modelPath << "Effective model:" << activeModelPath;
 
     m_whisperProcess->start(m_whisperPath, arguments);
 

@@ -3,6 +3,9 @@
 
 #include <QDialog>
 
+class QCheckBox;
+class QComboBox;
+
 namespace Ui {
 class SettingsDialog;
 }
@@ -20,12 +23,16 @@ public:
     QString getLanguage() const;
     QString getAudioDevice() const;
     QString getPerformanceMode() const;
+    QString getHotkey() const;
+    bool getUseVad() const;
 
     void setWhisperPath(const QString &path);
     void setModelPath(const QString &path);
     void setLanguage(const QString &language);
     void setAudioDevice(const QString &device);
     void setPerformanceMode(const QString &mode);
+    void setHotkey(const QString &hotkey);
+    void setUseVad(bool enabled, bool available);
     
     void setAvailableAudioDevices(const QStringList &devices);
 
@@ -41,6 +48,8 @@ private slots:
 
 private:
     Ui::SettingsDialog *ui;
+    QComboBox *m_hotkeyCombo;
+    QCheckBox *m_vadCheck;
 };
 
 #endif // SETTINGSDIALOG_H

@@ -1,4 +1,5 @@
 #include "audioconfigdialog.h"
+#include "audiodevices.h"
 #include "ui_audioconfigdialog.h"
 
 #include <QAudioFormat>
@@ -252,10 +253,19 @@ void AudioConfigDialog::onTestRecordClicked()
     m_audioRecorder->setEncodingSettings(settings);
     m_audioRecorder->setContainerFormat("audio/x-wav");
     
-    // Устанавливаем выбранное устройство
+    // Устанавливаем выбранное устройство (имена в списке и у QAudioRecorder могут отличаться)
     QString device = ui->deviceComboBox->currentText();
     if (!device.isEmpty() && device != "Устройства не найдены") {
-        m_audioRecorder->setAudioInput(device);
+        const QStringList inputs = m_audioRecorder->audioInputs();
+        QStringList descriptions;
+        for (const QString &input : inputs) {
+            descriptions << m_audioRecorder->audioInputDescription(input).trimmed();
+        }
+        int index = AudioDevices::matchName(inputs, device);
+        if (index < 0) {
+            index = AudioDevices::matchName(descriptions, device);
+        }
+        m_audioRecorder->setAudioInput(index >= 0 ? inputs.at(index) : m_audioRecorder->defaultAudioInput());
     }
     
     // Создаем временный файл для теста
@@ -350,14 +360,8 @@ void AudioConfigDialog::onCancelClicked()
 
 void AudioConfigDialog::onRefreshDevicesClicked()
 {
-    QStringList devices;
-    const QStringList inputs = m_audioRecorder->audioInputs();
+    const QStringList devices = AudioDevices::inputNames();
 
-    for (const QString &inputId : inputs) {
-        const QString description = m_audioRecorder->audioInputDescription(inputId).trimmed();
-        devices.append(description.isEmpty() ? inputId : description);
-    }
-    
     setAvailableAudioDevices(devices);
     
     if (devices.isEmpty()) {

@@ -1,4 +1,5 @@
 #include "realtimerecognizer.h"
+#include "audiodevices.h"
 
 #include <QAudioDeviceInfo>
 #include <QCoreApplication>
@@ -35,6 +36,8 @@ const int kInterimMinSamples = kSampleRate;
 const float kMinThreshold = 0.004f;                    // ~ -48 dBFS
 const int kServerStartTimeoutMs = 60000;
 const int kRequestTimeoutMs = 60000;
+const int kNoSignalFrames = 4000 / 30;                 // 4 с цифровой тишины
+const float kDigitalSilence = 1e-4f;                   // ~ -80 dBFS: микрофон выключен или не подключён
 }
 
 RealtimeRecognizer::RealtimeRecognizer(QObject *parent)
@@ -42,6 +45,10 @@ RealtimeRecognizer::RealtimeRecognizer(QObject *parent)
     , m_language("ru")
     , m_threads(4)
     , m_compactFinals(false)
+    , m_beamSize(0)
+    , m_live(true)
+    , m_silentFrames(0)
+    , m_noSignalReported(false)
     , m_audioInput(nullptr)
     , m_audioDevice(nullptr)
     , m_resamplePos(0.0)
@@ -121,6 +128,31 @@ void RealtimeRecognizer::setCompactFinals(bool enabled)
     m_compactFinals = enabled;
 }
 
+void RealtimeRecognizer::setBeamSize(int beamSize)
+{
+    m_beamSize = qMax(0, beamSize);
+}
+
+void RealtimeRecognizer::setVadModel(const QString &path)
+{
+    m_vadModel = path;
+}
+
+void RealtimeRecognizer::setLiveTranscription(bool enabled)
+{
+    m_live = enabled;
+}
+
+bool RealtimeRecognizer::isLive() const
+{
+    return m_live;
+}
+
+QString RealtimeRecognizer::recordingFile() const
+{
+    return m_recordingPath;
+}
+
 void RealtimeRecognizer::setRecordingFile(const QString &wavPath)
 {
     m_recordingPath = wavPath;
@@ -146,46 +178,24 @@ void RealtimeRecognizer::start()
         return;
     }
 
-    if (!QFile::exists(m_whisperPath)) {
+    if (m_live && !QFile::exists(m_whisperPath)) {
         emit error("Whisper не найден: " + m_whisperPath);
         return;
     }
-    if (!QFile::exists(m_modelPath)) {
+    if (m_live && !QFile::exists(m_modelPath)) {
         emit error("Файл модели не найден: " + m_modelPath);
         return;
     }
 
-    // Выбор устройства. Имена из QAudioRecorder и QAudioDeviceInfo на Windows могут
-    // отличаться (WinMM обрезает имя до 31 символа), поэтому сравниваем и по префиксу.
-    const QList<QAudioDeviceInfo> devices = QAudioDeviceInfo::availableDevices(QAudio::AudioInput);
-    if (devices.isEmpty()) {
+    if (QAudioDeviceInfo::availableDevices(QAudio::AudioInput).isEmpty()) {
         emit error("Не найдено ни одного устройства записи звука. Подключите микрофон.");
         return;
     }
 
-    QAudioDeviceInfo device = QAudioDeviceInfo::defaultInputDevice();
     bool found = false;
-    if (!m_deviceName.isEmpty()) {
-        for (const QAudioDeviceInfo &info : devices) {
-            if (info.deviceName() == m_deviceName) {
-                device = info;
-                found = true;
-                break;
-            }
-        }
-        if (!found) {
-            for (const QAudioDeviceInfo &info : devices) {
-                const QString name = info.deviceName();
-                if (!name.isEmpty() && (m_deviceName.startsWith(name) || name.startsWith(m_deviceName))) {
-                    device = info;
-                    found = true;
-                    break;
-                }
-            }
-        }
-        if (!found) {
-            emit log("Микрофон \"" + m_deviceName + "\" не найден, используется устройство по умолчанию", "WARNING");
-        }
+    const QAudioDeviceInfo device = AudioDevices::findInput(m_deviceName, &found);
+    if (!m_deviceName.isEmpty() && !found) {
+        emit log("Микрофон \"" + m_deviceName + "\" не найден, используется устройство по умолчанию", "WARNING");
     }
 
     QAudioFormat format;
@@ -211,7 +221,7 @@ void RealtimeRecognizer::start()
     }
     m_format = format;
 
-    emit log(QString("Реальное время: %1, %2 Гц, %3 бит, %4 кан.")
+    emit log(QString("Микрофон: %1, %2 Гц, %3 бит, %4 кан.")
              .arg(device.deviceName())
              .arg(format.sampleRate())
              .arg(format.sampleSize())
@@ -233,13 +243,16 @@ void RealtimeRecognizer::start()
     m_levelPeak = 0.0f;
     m_finalHistory.clear();
     m_stopping = false;
+    m_silentFrames = 0;
+    m_noSignalReported = false;
 
-    // Распознавание: сервер с моделью в памяти, иначе whisper-cli на каждую фразу
-    if (isServerMode() && m_serverModel != m_modelPath) {
+    // Распознавание: сервер с моделью в памяти, иначе whisper-cli на каждую фразу.
+    // При смене модели или фильтра шума сервер перезапускается.
+    if (m_live && isServerMode() && (m_serverModel != m_modelPath || m_serverVad != m_vadModel)) {
         stopServer();
         m_backend = NoBackend;
     }
-    if (m_backend == NoBackend || m_backend == CliBackend) {
+    if (m_live && (m_backend == NoBackend || m_backend == CliBackend)) {
         if (!serverExecutablePath().isEmpty()) {
             startServer();
         } else {
@@ -382,9 +395,13 @@ void RealtimeRecognizer::startServer()
          << "-t" << QString::number(m_threads)
          << "--host" << "127.0.0.1"
          << "--port" << QString::number(m_serverPort);
+    if (!m_vadModel.isEmpty()) {
+        args << "--vad" << "-vm" << m_vadModel;
+    }
 
     m_serverLogTail.clear();
     m_serverModel = m_modelPath;
+    m_serverVad = m_vadModel;
     m_backend = ServerStarting;
     m_serverStartTimer.start();
     emit log("Загрузка модели в whisper-server (порт " + QString::number(m_serverPort) + ")...", "INFO");
@@ -573,6 +590,24 @@ void RealtimeRecognizer::processFrame(const float *frame)
         m_levelPeak = 0.0f;
     }
 
+    // Микрофон выключен в системе или не подключён — приходят нули
+    float peak = 0.0f;
+    for (int i = 0; i < kFrameSamples; ++i) {
+        peak = qMax(peak, std::fabs(frame[i]));
+    }
+    if (peak < kDigitalSilence) {
+        if (++m_silentFrames == kNoSignalFrames && !m_noSignalReported) {
+            m_noSignalReported = true;
+            emit noSignal();
+        }
+    } else {
+        m_silentFrames = 0;
+    }
+
+    if (!m_live) {
+        return; // обычный режим: только запись в файл, распознавание после остановки
+    }
+
     // Первые ~300 мс — оценка фонового шума
     ++m_framesSeen;
     if (m_framesSeen <= 10) {
@@ -757,6 +792,9 @@ void RealtimeRecognizer::sendToServer(const Job &job)
     }
     addField("response_format", "json");
     addField("language", m_language.toUtf8());
+    if (job.isFinal && m_beamSize > 0) {
+        addField("beam_size", QByteArray::number(m_beamSize));
+    }
     const QString prompt = promptContext();
     if (!prompt.isEmpty()) {
         addField("prompt", prompt.toUtf8());
@@ -860,6 +898,12 @@ void RealtimeRecognizer::sendToCli(const Job &job)
     const int audioCtx = audioContextFor(job);
     if (audioCtx > 0) {
         args << "-ac" << QString::number(audioCtx);
+    }
+    if (m_beamSize > 0) {
+        args << "-bs" << QString::number(m_beamSize);
+    }
+    if (!m_vadModel.isEmpty()) {
+        args << "--vad" << "-vm" << m_vadModel;
     }
     const QString prompt = promptContext();
     if (!prompt.isEmpty()) {

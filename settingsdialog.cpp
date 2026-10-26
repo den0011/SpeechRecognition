@@ -1,5 +1,9 @@
 #include "settingsdialog.h"
 #include "ui_settingsdialog.h"
+#include "dictation.h"
+
+#include <QCheckBox>
+#include <QComboBox>
 
 #include <QFileDialog>
 #include <QMessageBox>
@@ -32,7 +36,31 @@ SettingsDialog::SettingsDialog(QWidget *parent) :
     ui->performanceModeComboBox->setItemData(0, "fast");
     ui->performanceModeComboBox->setItemData(1, "balanced");
     ui->performanceModeComboBox->setItemData(2, "accurate");
+    ui->performanceModeComboBox->setItemData(0, "Быстрее: укороченное окно распознавания, чуть менее точно", Qt::ToolTipRole);
+    ui->performanceModeComboBox->setItemData(1, "Обычный режим", Qt::ToolTipRole);
+    ui->performanceModeComboBox->setItemData(2, "Точнее: перебор 5 вариантов (beam search), примерно на 25% медленнее", Qt::ToolTipRole);
+    ui->performanceModeComboBox->setToolTip("Модель выбирается в поле «Путь к модели» и не подменяется автоматически");
     ui->performanceModeComboBox->setCurrentIndex(1);
+
+    // Дополнительные языки и автоопределение
+    ui->languageComboBox->addItems(QStringList() << "pl" << "auto");
+    ui->languageComboBox->setToolTip("auto — язык определяется автоматически (медленнее и иногда ошибается на коротких фразах)");
+
+    // Горячая клавиша для записи из любой программы (режим диктовки)
+    m_hotkeyCombo = new QComboBox(this);
+    m_hotkeyCombo->addItem("Не использовать", QString());
+    for (const QString &shortcut : GlobalHotkey::availableShortcuts()) {
+        m_hotkeyCombo->addItem(shortcut, shortcut);
+    }
+    m_hotkeyCombo->setToolTip("Начать/остановить запись, даже когда окно программы свёрнуто.\n"
+                              "С галочкой «Вставлять в активное окно» текст печатается туда, где стоит курсор.");
+    ui->formLayout->addRow("Горячая клавиша:", m_hotkeyCombo);
+
+    // Фильтр шума Silero VAD
+    m_vadCheck = new QCheckBox("Нейросетевой фильтр шума (Silero VAD)", this);
+    m_vadCheck->setToolTip("Отсекает шум и музыку внутри фраз, уменьшает «выдуманный» текст.\n"
+                           "Модель (0.9 МБ) скачивается через «Файл → Скачать Whisper и модели».");
+    ui->formLayout->addRow("Шумоподавление:", m_vadCheck);
 }
 
 SettingsDialog::~SettingsDialog()
@@ -63,6 +91,31 @@ QString SettingsDialog::getAudioDevice() const
 QString SettingsDialog::getPerformanceMode() const
 {
     return ui->performanceModeComboBox->currentData().toString();
+}
+
+QString SettingsDialog::getHotkey() const
+{
+    return m_hotkeyCombo->currentData().toString();
+}
+
+bool SettingsDialog::getUseVad() const
+{
+    return m_vadCheck->isChecked();
+}
+
+void SettingsDialog::setHotkey(const QString &hotkey)
+{
+    const int index = m_hotkeyCombo->findData(hotkey);
+    m_hotkeyCombo->setCurrentIndex(index >= 0 ? index : 0);
+}
+
+void SettingsDialog::setUseVad(bool enabled, bool available)
+{
+    m_vadCheck->setEnabled(available);
+    m_vadCheck->setChecked(enabled && available);
+    if (!available) {
+        m_vadCheck->setText("Нейросетевой фильтр шума (Silero VAD) — модель не скачана");
+    }
 }
 
 void SettingsDialog::setWhisperPath(const QString &path)

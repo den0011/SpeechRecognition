@@ -177,7 +177,7 @@
           <string>Быстро</string>
          </property>
          <property name="toolTip">
-          <string>Максимальная скорость, при наличии будет использована tiny-модель</string>
+          <string>Быстрее: укороченное окно распознавания, чуть менее точно</string>
          </property>
          <property name="whatsThis">
           <string>fast</string>
@@ -188,7 +188,7 @@
           <string>Баланс</string>
          </property>
          <property name="toolTip">
-          <string>Сбалансированный режим, при наличии будет использована base-модель</string>
+          <string>Обычный режим</string>
          </property>
          <property name="whatsThis">
           <string>balanced</string>
@@ -199,7 +199,7 @@
           <string>Точно</string>
          </property>
          <property name="toolTip">
-          <string>Приоритет качества, при наличии будет использована small-модель</string>
+          <string>Точнее: перебор 5 вариантов (beam search), примерно на 25% медленнее</string>
          </property>
          <property name="whatsThis">
           <string>accurate</string>
@@ -219,7 +219,7 @@
       <item>
        <widget class="QLabel" name="infoLabel">
         <property name="text">
-         <string>Для работы программы необходимо установить:</string>
+         <string>Проще всего — автоматически: «Файл → Скачать Whisper и модели». Или вручную:</string>
         </property>
         <property name="wordWrap">
          <bool>true</bool>

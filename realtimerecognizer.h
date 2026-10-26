@@ -15,7 +15,7 @@
 class QNetworkAccessManager;
 class QNetworkReply;
 
-// Распознавание речи "на лету":
+// Захват звука с микрофона и распознавание речи "на лету":
 // звук с микрофона читается напрямую (QAudioInput), делится на фразы по паузам (энергетический VAD),
 // каждая фраза сразу отправляется в whisper. Пока фраза не закончена, периодически
 // выдаётся промежуточный вариант текста.
@@ -34,6 +34,11 @@ public:
     void setAudioDevice(const QString &deviceName);
     void setThreads(int threads);
     void setCompactFinals(bool enabled);
+    void setBeamSize(int beamSize);
+    void setVadModel(const QString &path);
+    void setLiveTranscription(bool enabled);
+    bool isLive() const;
+    QString recordingFile() const;
     void setRecordingFile(const QString &wavPath);
 
     bool isRunning() const;
@@ -50,6 +55,7 @@ signals:
     void partialText(const QString &text);
     void finalText(const QString &text);
     void levelChanged(int percent);
+    void noSignal();
     void error(const QString &errorMsg);
     void log(const QString &message, const QString &level);
 
@@ -101,6 +107,11 @@ private:
     QString m_deviceName;
     int m_threads;
     bool m_compactFinals;
+    int m_beamSize;
+    QString m_vadModel;
+    bool m_live;
+    int m_silentFrames;
+    bool m_noSignalReported;
 
     // Захват звука
     QAudioInput *m_audioInput;
@@ -129,6 +140,7 @@ private:
     QProcess *m_serverProcess;
     QString m_serverModel;
     QString m_serverLogTail;
+    QString m_serverVad;
     int m_serverPort;
     QTimer *m_probeTimer;
     QElapsedTimer m_serverStartTimer;

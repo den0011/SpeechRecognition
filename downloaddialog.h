@@ -12,7 +12,8 @@ class QProgressBar;
 class QPushButton;
 class QTextEdit;
 
-// Скачивание whisper.cpp (whisper-cli + whisper-server) и моделей прямо из программы.
+// Скачивание whisper.cpp (whisper-cli + whisper-server), моделей распознавания
+// и модели фильтра шума прямо из программы.
 // Загрузка идёт через системные curl и tar (есть в Windows 10/11), поэтому
 // не нужны библиотеки OpenSSL для Qt.
 class DownloadDialog : public QDialog
@@ -27,6 +28,9 @@ public:
     QString modelPath() const;
 
     static QString installDirectory();
+    static QString findInstalledWhisper();
+    static QString findInstalledModel();
+    static QString vadModelPath();
 
 private slots:
     void onStartClicked();
@@ -35,7 +39,7 @@ private slots:
     void onProgressTick();
 
 private:
-    enum Step { Idle, FetchRelease, DownloadBinaries, ExtractBinaries, DownloadModel };
+    enum Step { Idle, FetchRelease, DownloadBinaries, ExtractBinaries, DownloadModel, DownloadVad };
 
     struct ModelInfo {
         QString file;
@@ -45,6 +49,8 @@ private:
 
     void refreshState();
     void nextStep();
+    void startModelDownload();
+    void startVadDownload();
     void fetchRelease();
     void downloadFile(const QString &url, const QString &target, qint64 expectedSize);
     void extractBinaries();
@@ -52,17 +58,21 @@ private:
     void fail(const QString &message);
     void appendLog(const QString &message);
     void setBusy(bool busy);
-    QString findWhisperCli() const;
+    bool assetMatches(const QString &assetName) const;
+    QString selectedVariant() const;
     QString selectedModelFile() const;
     qint64 selectedModelSize() const;
-    static QString binaryArchiveName();
+    static QString installedVariant();
+    static bool hasNvidiaGpu();
     static QString formatSize(qint64 bytes);
 
 private:
     QCheckBox *m_binCheck;
+    QComboBox *m_variantCombo;
     QLabel *m_binStatus;
     QComboBox *m_modelCombo;
     QLabel *m_modelStatus;
+    QCheckBox *m_vadCheck;
     QProgressBar *m_progress;
     QLabel *m_stepLabel;
     QTextEdit *m_log;
@@ -78,6 +88,7 @@ private:
     qint64 m_lastSize;
     qint64 m_lastTick;
     QString m_assetUrl;
+    QString m_assetName;
     qint64 m_assetSize;
     QString m_releaseTag;
     QString m_whisperPath;
